@@ -635,6 +635,7 @@
     const ADMIN_KEY_STORE = 'mt_admin_key';
     const ADMIN_CONFIG_STORE = 'mt_admin_config_v1';
 
+    let persistConfigTimer = null;
     const logBox = document.getElementById('log-box');
 
     function log(msg) {
@@ -690,11 +691,55 @@
       }
     }
 
-    function persistConfig() {
+    function cacheConfigLocally(config) {
       try {
-        localStorage.setItem(ADMIN_CONFIG_STORE, JSON.stringify(configData));
+        localStorage.setItem(ADMIN_CONFIG_STORE, JSON.stringify(config));
       } catch (e) {
         console.warn('无法保存配置到本地存储', e);
+      }
+    }
+
+    async function fetchServerConfig() {
+      try {
+        const res = await fetch('/web/admin-config');
+        if (!res.ok) throw new Error('拉取失败');
+        const data = await res.json();
+        const config = data && typeof data === 'object' ? (data.config || data) : null;
+        return config && typeof config === 'object' ? config : null;
+      } catch (e) {
+        log(`服务器配置拉取失败，尝试本地缓存：${e.message || e}`);
+        return null;
+      }
+    }
+
+    async function persistConfig() {
+      cacheConfigLocally(configData);
+
+      if (!adminMode || !adminKey) return;
+
+      try {
+        const res = await fetch('/web/admin-config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': adminKey,
+          },
+          body: JSON.stringify({ config: configData }),
+        });
+
+        if (!res.ok) {
+          let detail = '保存失败';
+          try {
+            const raw = await res.text();
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              detail = parsed.detail || parsed.message || detail;
+            }
+          } catch {}
+          throw new Error(detail);
+        }
+      } catch (e) {
+        console.warn('保存到服务器失败，仅本地缓存有效：', e.message || e);
       }
     }
 
@@ -772,7 +817,12 @@
         cursor = cursor[key];
       }
       cursor[segments[segments.length - 1]] = value;
-      persistConfig();
+      schedulePersistConfig();
+    }
+
+    function schedulePersistConfig() {
+      if (persistConfigTimer) clearTimeout(persistConfigTimer);
+      persistConfigTimer = setTimeout(() => { persistConfig(); }, 400);
     }
 
     function renderSection(containerId, sectionKey, sectionData) {
@@ -817,12 +867,14 @@
         const res = await fetch('/web/default-config');
         const data = await res.json();
         defaultConfig = clone(data);
-        const saved = loadSavedConfig();
+        const serverSaved = await fetchServerConfig();
+        const localSaved = loadSavedConfig();
+        const saved = serverSaved || localSaved;
         configData = saved ? mergeConfig(defaultConfig, saved) : clone(defaultConfig);
-        persistConfig();
+        cacheConfigLocally(configData);
         renderAll();
         renderGuestOptions();
-        log('默认配置已载入');
+        log(serverSaved ? '已载入服务器保存的配置' : '默认配置已载入');
       } catch (e) {
         log('载入配置失败，请检查服务是否启动');
       }
@@ -830,7 +882,7 @@
 
     function resetConfig() {
       configData = clone(defaultConfig);
-      persistConfig();
+      schedulePersistConfig();
       renderAll();
       log('已恢复默认配置');
     }

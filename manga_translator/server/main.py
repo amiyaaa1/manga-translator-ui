@@ -44,6 +44,7 @@ DATA_DIR = Path(os.getenv("MT_DATA_DIR", Path.home() / ".manga_translator"))
 CLOUD_PRESET_ENV = os.getenv("MT_CLOUD_PRESETS")
 LEGACY_CLOUD_PRESET_PATH = Path(__file__).parent / "cloud_presets.json"
 CLOUD_PRESET_PATH = Path(os.getenv("MT_CLOUD_PRESET_PATH", DATA_DIR / "cloud_presets.json"))
+ADMIN_CONFIG_PATH = Path(os.getenv("MT_ADMIN_CONFIG_PATH", DATA_DIR / "admin_config.json"))
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
@@ -98,6 +99,32 @@ def save_cloud_presets(presets: list[dict]):
             json.dump(presets, f, ensure_ascii=False, indent=2)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"无法保存云端预设：{e}")
+
+
+def load_admin_config() -> dict:
+    """Load admin-configured overrides for the web 控制台."""
+    if not ADMIN_CONFIG_PATH.exists():
+        return {}
+
+    try:
+        with ADMIN_CONFIG_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"[WARNING] Failed to load admin config from {ADMIN_CONFIG_PATH}: {e}")
+        return {}
+
+
+def save_admin_config(config: dict):
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=400, detail="配置格式必须为对象")
+
+    try:
+        ADMIN_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with ADMIN_CONFIG_PATH.open("w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"无法保存管理员配置：{e}")
 
 def parse_config(config_str: str) -> Config:
     """解析配置，如果为空则使用默认配置"""
@@ -168,6 +195,12 @@ async def default_config():
     return config.model_dump()
 
 
+@app.get("/web/admin-config")
+async def get_admin_config():
+    """Return admin-saved overrides for the Web 控制台."""
+    return {"config": load_admin_config()}
+
+
 @app.post("/web/admin-login")
 async def admin_login(req: Request):
     data = await req.json()
@@ -205,6 +238,28 @@ async def set_cloud_presets(req: Request):
 
     save_cloud_presets(presets)
     return {"ok": True, "presets": presets}
+
+
+@app.post("/web/admin-config")
+async def set_admin_config(req: Request):
+    """Persist admin-level config so it can be shared across devices."""
+    data = await req.json()
+    provided = str(req.headers.get("X-Admin-Key", "") or "").strip()
+    secret = os.getenv(ADMIN_SECRET_ENV)
+
+    if not secret:
+        raise HTTPException(status_code=503, detail="管理员密钥未在服务器上配置")
+    if provided != secret:
+        raise HTTPException(status_code=401, detail="管理员密钥不正确")
+
+    config = data.get("config") if isinstance(data, dict) else None
+    if config is None:
+        config = {}
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=400, detail="配置格式必须为对象")
+
+    save_admin_config(config)
+    return {"ok": True, "config": config}
 
 @app.post("/register", response_description="no response", tags=["internal-api"])
 async def register_instance(instance: ExecutorInstance, req: Request, req_nonce: str = Header(alias="X-Nonce")):
