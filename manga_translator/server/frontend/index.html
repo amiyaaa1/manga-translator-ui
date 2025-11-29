@@ -257,13 +257,113 @@
     .preset-row .btn { padding: 8px 12px; }
     .preset-form { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; }
     .error { color: #fca5a5; font-size: 13px; margin-top: 6px; }
+
+    /* Landing */
+    .landing {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 20% 20%, #c7d2fe 0, rgba(199,210,254,0) 30%),
+                  radial-gradient(circle at 80% 0%, #bae6fd 0, rgba(186,230,253,0) 25%),
+                  #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      padding: 20px;
+    }
+
+    .landing-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+      padding: 28px;
+      max-width: 520px;
+      width: 100%;
+      border: 1px solid #e2e8f0;
+    }
+
+    .landing h1 { margin: 0 0 6px; color: #0f172a; font-size: 24px; }
+    .landing p { margin: 0 0 18px; color: #475569; line-height: 1.6; }
+    .landing-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .landing input { width: 220px; padding: 10px 12px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .landing .ghost-btn { background: #0ea5e9; color: #fff; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 30px rgba(14,165,233,0.25); }
+    .landing .ghost-btn.secondary { background: #0f172a; color: #fff; box-shadow: none; }
+    .landing .ghost-btn:active { transform: translateY(1px); }
+
+    /* Guest */
+    #guest-view { background: #fff; min-height: 100vh; color: #0f172a; }
+    .guest-wrap { max-width: 980px; margin: 0 auto; padding: 36px 20px 48px; display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+    .guest-card { border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; box-shadow: 0 14px 40px rgba(15,23,42,0.05); background: #fff; }
+    .guest-card h3 { margin: 0 0 10px; font-size: 18px; color: #0f172a; }
+    .guest-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 160px; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 24px; text-align: center; color: #475569; background: linear-gradient(180deg, #f8fafc, #fff); cursor: pointer; transition: border-color 0.2s ease, transform 0.1s ease; }
+    .guest-upload:hover { border-color: #0ea5e9; transform: translateY(-1px); }
+    .guest-upload input { display: none; }
+    .guest-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; margin-top: 12px; }
+    .guest-options label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; color: #1f2937; }
+    .guest-options select { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; color: #0f172a; }
+    .guest-btn { width: 100%; margin-top: 16px; padding: 12px 14px; border-radius: 12px; border: none; background: linear-gradient(90deg,#0ea5e9,#38bdf8); color: #fff; font-weight: 700; cursor: pointer; box-shadow: 0 14px 30px rgba(56,189,248,0.25); }
+    .guest-btn:active { transform: translateY(1px); }
+    .guest-announcement { margin-top: 10px; padding: 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+    .guest-result { margin-top: 16px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; padding: 12px; text-align: center; }
+    .guest-result img { max-width: 100%; border-radius: 12px; }
+    .switch-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #0ea5e9; cursor: pointer; text-decoration: none; }
   </style>
 </head>
 <body>
+  <div id="landing" class="landing">
+    <div class="landing-card">
+      <h1>选择访问模式</h1>
+      <p>请输入管理员密钥进入完整控制台，或以访客身份体验精简上传与翻译功能。</p>
+      <div class="landing-actions">
+        <input id="landing-admin-key" type="password" placeholder="管理员密钥 (WEB_CONSOLE_ADMIN_KEY)" />
+        <button id="landing-admin-btn" class="ghost-btn">管理员登录</button>
+        <button id="landing-guest-btn" class="ghost-btn secondary">访客访问</button>
+      </div>
+      <p style="margin-top:12px;color:#64748b;font-size:14px;">可随时在界面右上角切换访问身份。</p>
+    </div>
+  </div>
+
+  <div id="guest-view" style="display:none;">
+    <div class="guest-wrap">
+      <div class="guest-card">
+        <h3>图片上传</h3>
+        <label class="guest-upload" for="guest-file">
+          <div id="guest-file-label">点击选择一张图片进行翻译</div>
+          <input id="guest-file" type="file" accept="image/*" />
+        </label>
+        <div class="guest-options">
+          <label>目标语言
+            <select id="guest-target"></select>
+          </label>
+          <label>管理员预设
+            <select id="guest-preset"></select>
+          </label>
+          <label>检测器
+            <select id="guest-detector"></select>
+          </label>
+          <label>OCR 模型
+            <select id="guest-ocr"></select>
+          </label>
+        </div>
+        <button id="guest-translate-btn" class="guest-btn">开始翻译</button>
+        <div id="guest-result" class="guest-result" style="display:none;"></div>
+      </div>
+      <div class="guest-card">
+        <h3>公告栏</h3>
+        <div id="guest-announcement" class="guest-announcement"></div>
+        <div style="margin-top:12px; font-size:14px; color:#64748b; display:flex; flex-direction:column; gap:6px;">进入管理员模式可编辑公告与完整设置。
+          <a id="guest-switch" class="switch-link">切换到管理员模式</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-view" style="display:none;">
   <header>
     <div class="title">Manga Translator 云端控制台</div>
     <div class="badge">与本地界面一致的全量设置</div>
     <div class="spacer"></div>
+    <button id="switch-mode-btn" class="btn secondary">切换访问身份</button>
     <span id="admin-status" class="pill">访客模式</span>
     <button id="admin-btn" class="btn secondary">管理员登录</button>
     <button id="reset-btn" class="btn secondary">恢复默认设置</button>
@@ -316,6 +416,15 @@
             <div id="preset-zone"></div>
             <div id="preset-error" class="error" style="display:none;"></div>
           </div>
+          <div class="card" style="margin-top: 12px;">
+            <h4>公告栏文案 <span class="admin-only">管理员可编辑</span></h4>
+            <p class="hint">访客页面将显示此公告。未登录管理员时仅可查看。</p>
+            <textarea id="announcement-input" rows="4" placeholder="填写公告内容"></textarea>
+            <div class="settings-actions">
+              <button id="announcement-save" class="btn secondary">保存公告</button>
+            </div>
+            <div id="announcement-msg" class="hint"></div>
+          </div>
         </div>
 
         <div id="tab-advanced" class="tab-panel">
@@ -355,6 +464,7 @@
         </div>
       </div>
     </div>
+  </div>
   </div>
 
   <script>
@@ -475,6 +585,11 @@
       theme: ['light','dark']
     };
 
+    const ANNOUNCEMENT_KEY = 'mt_guest_announcement';
+    const DEFAULT_ANNOUNCEMENT = `本项目完全免费。
+项目地址：https://github.com/hgmzhn/manga-translator-ui
+受限于服务器资源，当前仅支持基础功能体验，完整服务如ai断句、编辑、批量翻译、超分等请于Github下载本项目。`;
+
     const SECTION_FIELDS = {
       translator: [
         'translator','target_lang','skip_lang','no_text_lang_skip','gpt_config','high_quality_prompt_path','translator_chain','selective_translation','attempts','max_requests_per_minute','enable_post_translation_check','post_check_max_retry_attempts','post_check_repetition_threshold','post_check_target_lang_threshold'
@@ -510,8 +625,14 @@
     let files = [];
     let results = [];
     let adminMode = false;
+    let guestFile = null;
+    let announcementText = '';
+    let adminKey = '';
+    let presetCache = [];
+    let presetsLoaded = false;
     const PRESET_STORE = 'mt_cloud_api_presets_v2';
     const PRESET_SELECT_STORE = 'mt_cloud_api_selected_v2';
+    const ADMIN_KEY_STORE = 'mt_admin_key';
 
     const logBox = document.getElementById('log-box');
 
@@ -523,6 +644,24 @@
 
     function clone(obj) {
       return JSON.parse(JSON.stringify(obj || {}));
+    }
+
+    function loadAnnouncement() {
+      const saved = localStorage.getItem(ANNOUNCEMENT_KEY);
+      return saved && saved.trim() ? saved : DEFAULT_ANNOUNCEMENT;
+    }
+
+    function saveAnnouncement(text) {
+      announcementText = text;
+      localStorage.setItem(ANNOUNCEMENT_KEY, text);
+      updateAnnouncementDisplays();
+    }
+
+    function updateAnnouncementDisplays() {
+      const guestBoard = document.getElementById('guest-announcement');
+      const input = document.getElementById('announcement-input');
+      if (guestBoard) guestBoard.textContent = announcementText;
+      if (input) input.value = announcementText;
     }
 
     function getDisplayName(key) {
@@ -645,6 +784,7 @@
         defaultConfig = clone(data);
         configData = clone(data);
         renderAll();
+        renderGuestOptions();
         log('默认配置已载入');
       } catch (e) {
         log('载入配置失败，请检查服务是否启动');
@@ -699,6 +839,42 @@
       log(`已添加 ${fileList.length} 个文件`);
     }
 
+    function populateSelect(el, options, selected) {
+      el.innerHTML = '';
+      options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        if (opt === selected) option.selected = true;
+        el.appendChild(option);
+      });
+    }
+
+    function renderGuestOptions() {
+      const presetSelect = document.getElementById('guest-preset');
+      const targetSelect = document.getElementById('guest-target');
+      const detectorSelect = document.getElementById('guest-detector');
+      const ocrSelect = document.getElementById('guest-ocr');
+      if (!presetSelect) return;
+
+      populateSelect(targetSelect, ENUM_OPTIONS.target_lang || [], configData?.translator?.target_lang || 'CHS');
+      populateSelect(detectorSelect, ENUM_OPTIONS.detector || [], configData?.detector?.detector || 'default');
+      populateSelect(ocrSelect, ENUM_OPTIONS.ocr || [], configData?.ocr?.ocr || 'mocr');
+
+      presetSelect.innerHTML = '';
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = '不使用预设';
+      presetSelect.appendChild(empty);
+      loadPresets().forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        presetSelect.appendChild(opt);
+      });
+      presetSelect.value = currentPresetName();
+    }
+
     function renderTabs() {
       document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -733,7 +909,7 @@
       });
     }
 
-    function loadPresets() {
+    function readLocalPresets() {
       try {
         const raw = localStorage.getItem(PRESET_STORE);
         const parsed = raw ? JSON.parse(raw) : [];
@@ -743,8 +919,67 @@
       }
     }
 
-    function savePresets(list) {
+    function writeLocalPresets(list) {
       localStorage.setItem(PRESET_STORE, JSON.stringify(list));
+    }
+
+    function loadPresets() {
+      if (!presetsLoaded) {
+        presetCache = readLocalPresets();
+        presetsLoaded = true;
+      }
+      return presetCache;
+    }
+
+    function setCachedPresets(list) {
+      presetCache = Array.isArray(list) ? list : [];
+      presetsLoaded = true;
+      writeLocalPresets(presetCache);
+    }
+
+    async function refreshPresetsFromServer() {
+      try {
+        const res = await fetch('/web/api-presets');
+        if (!res.ok) throw new Error('拉取失败');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setCachedPresets(data);
+          return data;
+        }
+      } catch (e) {
+        log(`云端预设拉取失败，继续使用本地数据：${e.message || e}`);
+      }
+      return loadPresets();
+    }
+
+    async function persistPresets(list) {
+      if (!adminKey) throw new Error('请先登录管理员');
+      const res = await fetch('/web/api-presets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': adminKey,
+        },
+        body: JSON.stringify({ presets: list }),
+      });
+      if (!res.ok) {
+        let detail = '保存失败';
+        try {
+          const raw = await res.text();
+          if (raw) {
+            try {
+              const data = JSON.parse(raw);
+              detail = data.detail || data.message || detail;
+            } catch {
+              detail = `${detail}: ${raw}`;
+            }
+          }
+        } catch (e) {
+          detail = `${detail}: ${e.message || e}`;
+        }
+        throw new Error(detail);
+      }
+      setCachedPresets(list);
     }
 
     function currentPresetName() {
@@ -762,7 +997,7 @@
 
     function renderPresetZone() {
       const container = document.getElementById('preset-zone');
-      const presets = loadPresets();
+      let presets = loadPresets();
       const selected = currentPresetName();
       container.innerHTML = '';
 
@@ -826,7 +1061,7 @@
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn secondary';
         saveBtn.textContent = '保存 / 更新预设';
-        saveBtn.addEventListener('click', () => {
+        saveBtn.addEventListener('click', async () => {
           const name = inputs.name.value.trim();
           if (!name) {
             showPresetError('请填写预设名称');
@@ -840,22 +1075,32 @@
             api_model: inputs.api_model.value.trim(),
             api_key: inputs.api_key.value.trim(),
           });
-          savePresets(updated);
-          setCurrentPreset(name);
-          renderPresetZone();
-          log(`已保存预设 ${name}`);
+          try {
+            await persistPresets(updated);
+            presets = loadPresets();
+            setCurrentPreset(name);
+            renderPresetZone();
+            log(`已保存预设 ${name}`);
+          } catch (e) {
+            showPresetError(e.message || '保存失败');
+          }
         });
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn secondary';
         deleteBtn.textContent = '删除预设';
-        deleteBtn.addEventListener('click', () => {
+        deleteBtn.addEventListener('click', async () => {
           if (!selected) return;
           const filtered = presets.filter(p => p.name !== selected);
-          savePresets(filtered);
-          setCurrentPreset('');
-          renderPresetZone();
-          log(`已删除预设 ${selected}`);
+          try {
+            await persistPresets(filtered);
+            presets = loadPresets();
+            setCurrentPreset('');
+            renderPresetZone();
+            log(`已删除预设 ${selected}`);
+          } catch (e) {
+            showPresetError(e.message || '删除失败');
+          }
         });
 
         actions.appendChild(saveBtn);
@@ -863,6 +1108,8 @@
         form.appendChild(actions);
         container.appendChild(form);
       }
+
+      renderGuestOptions();
     }
 
     function showPresetError(msg) {
@@ -922,9 +1169,107 @@
       return URL.createObjectURL(blob);
     }
 
-    async function promptAdminLogin() {
-      const key = prompt('请输入管理员密钥 (WEB_CONSOLE_ADMIN_KEY)');
-      if (!key) return;
+    async function translateGuestSingle(file) {
+      const presetName = document.getElementById('guest-preset').value;
+      const preset = loadPresets().find(p => p.name === presetName) || null;
+      const fd = new FormData();
+      fd.append('image', file);
+      const guestConfig = clone(configData);
+      guestConfig.translator = guestConfig.translator || {};
+      guestConfig.detector = guestConfig.detector || {};
+      guestConfig.ocr = guestConfig.ocr || {};
+      guestConfig.translator.target_lang = document.getElementById('guest-target').value;
+      guestConfig.detector.detector = document.getElementById('guest-detector').value;
+      guestConfig.ocr.ocr = document.getElementById('guest-ocr').value;
+      fd.append('config', JSON.stringify(guestConfig));
+      if (preset) {
+        if (preset.api_base) fd.append('api_base', preset.api_base);
+        if (preset.api_key) fd.append('api_key', preset.api_key);
+        if (preset.api_model) fd.append('api_model', preset.api_model);
+      }
+      const res = await fetch('/translate/with-form/image', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || '翻译失败');
+      }
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    }
+
+    function showLanding() {
+      document.getElementById('landing').style.display = 'flex';
+      document.getElementById('guest-view').style.display = 'none';
+      document.getElementById('admin-view').style.display = 'none';
+    }
+
+    function enterGuestMode() {
+      adminMode = false;
+      sessionStorage.removeItem('mt_admin');
+      updateAdminStatus();
+      renderPresetZone();
+      syncAnnouncementEditor();
+      updateAnnouncementDisplays();
+      guestFile = null;
+      const guestInput = document.getElementById('guest-file');
+      if (guestInput) guestInput.value = '';
+      const guestLabel = document.getElementById('guest-file-label');
+      if (guestLabel) guestLabel.textContent = '点击选择一张图片进行翻译';
+      document.getElementById('guest-result').style.display = 'none';
+      document.getElementById('landing').style.display = 'none';
+      document.getElementById('guest-view').style.display = 'block';
+      document.getElementById('admin-view').style.display = 'none';
+    }
+
+    function enterAdminMode() {
+      document.getElementById('landing').style.display = 'none';
+      document.getElementById('guest-view').style.display = 'none';
+      document.getElementById('admin-view').style.display = 'block';
+      syncAnnouncementEditor();
+      updateAnnouncementDisplays();
+    }
+
+    function syncAnnouncementEditor() {
+      const input = document.getElementById('announcement-input');
+      const btn = document.getElementById('announcement-save');
+      const msg = document.getElementById('announcement-msg');
+      if (!input || !btn || !msg) return;
+      input.value = announcementText;
+      input.disabled = !adminMode;
+      btn.disabled = !adminMode;
+      msg.textContent = adminMode ? '' : '登录管理员后可编辑公告';
+    }
+
+    async function translateGuest() {
+      if (!guestFile) {
+        setGuestResult('<div style="color:#dc2626;">请先选择一张图片</div>');
+        return;
+      }
+      const btn = document.getElementById('guest-translate-btn');
+      btn.disabled = true;
+      btn.textContent = '翻译中…';
+      try {
+        const url = await translateGuestSingle(guestFile);
+        setGuestResult(`<img src="${url}" alt="翻译结果" />`);
+      } catch (e) {
+        setGuestResult(`<div style="color:#dc2626;">${e.message || e}</div>`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '开始翻译';
+      }
+    }
+
+    function setGuestResult(html) {
+      const box = document.getElementById('guest-result');
+      box.style.display = 'block';
+      box.innerHTML = html;
+    }
+
+    async function promptAdminLogin(providedKey) {
+      const key = typeof providedKey === 'string' ? providedKey : prompt('请输入管理员密钥 (WEB_CONSOLE_ADMIN_KEY)');
+      if (!key) return false;
       try {
         const res = await fetch('/web/admin-login', {
           method: 'POST',
@@ -933,21 +1278,33 @@
         });
         if (!res.ok) throw new Error((await res.json()).detail || '认证失败');
         adminMode = true;
+        adminKey = key;
         sessionStorage.setItem('mt_admin', '1');
+        sessionStorage.setItem(ADMIN_KEY_STORE, key);
         updateAdminStatus();
+        await refreshPresetsFromServer();
         renderPresetZone();
+        syncAnnouncementEditor();
+        enterAdminMode();
+        updateAnnouncementDisplays();
         log('管理员登录成功');
+        return true;
       } catch (e) {
         log(`管理员登录失败：${e.message}`);
         alert('管理员密钥错误或未配置');
+        return false;
       }
     }
 
     function logoutAdmin() {
       adminMode = false;
+      adminKey = '';
       sessionStorage.removeItem('mt_admin');
+      sessionStorage.removeItem(ADMIN_KEY_STORE);
       updateAdminStatus();
       renderPresetZone();
+      syncAnnouncementEditor();
+      showLanding();
     }
 
     function updateAdminStatus() {
@@ -966,13 +1323,26 @@
 
     function restoreAdminSession() {
       adminMode = sessionStorage.getItem('mt_admin') === '1';
+      adminKey = sessionStorage.getItem(ADMIN_KEY_STORE) || '';
       updateAdminStatus();
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      announcementText = loadAnnouncement();
+      updateAnnouncementDisplays();
       renderTabs();
       restoreAdminSession();
+      loadPresets();
+      refreshPresetsFromServer().then(() => { renderPresetZone(); renderGuestOptions(); });
       loadConfig();
+
+      document.getElementById('landing-admin-btn').addEventListener('click', async () => {
+        const key = document.getElementById('landing-admin-key').value.trim();
+        await promptAdminLogin(key);
+      });
+      document.getElementById('landing-guest-btn').addEventListener('click', enterGuestMode);
+      document.getElementById('switch-mode-btn').addEventListener('click', showLanding);
+      document.getElementById('guest-switch').addEventListener('click', showLanding);
 
       document.getElementById('dropzone').addEventListener('click', () => document.getElementById('file-input').click());
       document.getElementById('file-input').addEventListener('change', (e) => addFiles(e.target.files));
@@ -988,6 +1358,25 @@
         }
       });
 
+      document.getElementById('guest-file').addEventListener('change', (e) => {
+        const [file] = e.target.files || [];
+        guestFile = file || null;
+        document.getElementById('guest-file-label').textContent = guestFile ? `已选择：${guestFile.name}` : '点击选择一张图片进行翻译';
+        document.getElementById('guest-result').style.display = 'none';
+      });
+      document.getElementById('guest-preset').addEventListener('change', (e) => setCurrentPreset(e.target.value));
+      document.getElementById('guest-translate-btn').addEventListener('click', translateGuest);
+
+      document.getElementById('announcement-save').addEventListener('click', () => {
+        if (!adminMode) {
+          alert('请先登录管理员再编辑公告');
+          return;
+        }
+        const text = document.getElementById('announcement-input').value.trim() || DEFAULT_ANNOUNCEMENT;
+        saveAnnouncement(text);
+        document.getElementById('announcement-msg').textContent = '公告已保存';
+      });
+
       const dropzone = document.getElementById('dropzone');
       ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.style.borderColor = '#38bdf8'; }));
       ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.style.borderColor = '#2b3a52'; }));
@@ -996,6 +1385,13 @@
       renderPresetZone();
       renderFileList();
       renderPreview();
+
+      if (adminMode) {
+        enterAdminMode();
+      } else {
+        showLanding();
+      }
+      syncAnnouncementEditor();
     });
   </script>
 </body>

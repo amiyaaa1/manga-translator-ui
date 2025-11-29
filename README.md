@@ -196,8 +196,18 @@ python -m manga_translator --help
 - 网页端已重构为与本地 Qt 界面相同的布局：左侧文件列表 + 右侧「基础/高级/选项/日志」完整设置面板，字段名称与本地保持一致。
 - 左侧上传漫画图片后，可在云端 API 设置里填写 **Base URL / 模型名称 / API Key**（OpenAI 兼容），保存为多个预设。
 - 仅管理员登录后可编辑云端 API 预设；访客只能看到当前预设名称，避免误改密钥。管理员密钥来自环境变量 `WEB_CONSOLE_ADMIN_KEY`。
+- 云端预设默认保存在服务器 `~/.manga_translator/cloud_presets.json`，可通过 `MT_DATA_DIR` 或 `MT_CLOUD_PRESET_PATH` 覆盖保存位置；如果之前版本已在 `manga_translator/server/cloud_presets.json` 中写入，会自动读取旧文件。若希望跨设备直接下发一组预设且禁用服务器写盘，可设置环境变量 `MT_CLOUD_PRESETS` 为预设列表的 JSON 字符串（示例：`export MT_CLOUD_PRESETS='[{"name":"默认","api_base":"https://api.openai.com/v1","api_model":"gpt-4o-mini","api_key":"sk-xxx"}]'`），此时访客只读引用该列表，管理员侧保存入口会提示已被环境变量接管。
 - 点击「开始翻译」后会调用 `/translate/with-form/image`，右侧即时预览翻译结果并可下载。
 - 如果云端禁用了 `ctranslate2`（Zeabur 常见），离线翻译器会被自动跳过，建议切换到 `nllb`、`qwen2` 或云端翻译 API 预设。
+
+### 网页控制台怎么用（管理员/游客）
+
+1. **启动 Web 模式**：本地运行 `python -m manga_translator web --host 0.0.0.0 --port 8000`，或在云端按上文设置好 `WEB_CONSOLE_ADMIN_KEY` 环境变量后部署。
+2. **访问入口**：打开 `http://<主机或域名>:8000/`（或 `/console`）。首次进入会出现身份选择框：
+   - **管理员模式**：输入 `WEB_CONSOLE_ADMIN_KEY` 后解锁完整控制台（与桌面界面字段一致），可上传多张图、调节「基础/高级/选项/日志」设置，并在「API 预设」区域新增/保存云端预设。
+   - **游客模式**：无需密钥，展示极简白色页面，只有单张图片上传、目标语言/预设/检测器/OCR 模型选择及开始翻译按钮，适合快速体验。
+3. **云端预设共享**：管理员保存的 API 预设会写入服务器侧（`/web/api-presets`），所有访客和其他设备刷新页面后即可看到同一套预设名称并直接选择使用。
+4. **公告栏**：管理员模式下可编辑公告文本（默认展示项目介绍和仓库地址），保存后访客页面顶部的公告栏会同步显示，便于发布提示信息。
 
 ### 调用示例
 

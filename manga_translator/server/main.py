@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import secrets
 import shutil
@@ -39,6 +40,10 @@ server_config = {
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config.json')
 DEFAULT_CONFIG_FALLBACK = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config-example.json')
 FRONTEND_DIR = Path(__file__).parent / "frontend"
+DATA_DIR = Path(os.getenv("MT_DATA_DIR", Path.home() / ".manga_translator"))
+CLOUD_PRESET_ENV = os.getenv("MT_CLOUD_PRESETS")
+LEGACY_CLOUD_PRESET_PATH = Path(__file__).parent / "cloud_presets.json"
+CLOUD_PRESET_PATH = Path(os.getenv("MT_CLOUD_PRESET_PATH", DATA_DIR / "cloud_presets.json"))
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
@@ -58,6 +63,41 @@ def load_default_config() -> Config:
 
     print(f"[WARNING] Default config file not found: {DEFAULT_CONFIG_PATH}")
     return Config()
+
+
+def load_cloud_presets() -> list[dict]:
+    """Load shared cloud API presets from disk."""
+    if CLOUD_PRESET_ENV:
+        try:
+            data = json.loads(CLOUD_PRESET_ENV)
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[WARNING] Failed to parse MT_CLOUD_PRESETS: {e}")
+
+    for path in (CLOUD_PRESET_PATH, LEGACY_CLOUD_PRESET_PATH):
+        if not path.exists():
+            continue
+
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[WARNING] Failed to load cloud presets from {path}: {e}")
+            continue
+
+    return []
+
+
+def save_cloud_presets(presets: list[dict]):
+    if CLOUD_PRESET_ENV:
+        raise HTTPException(status_code=503, detail="当前由环境变量 MT_CLOUD_PRESETS 管理，无法保存云端预设")
+    try:
+        CLOUD_PRESET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with CLOUD_PRESET_PATH.open("w", encoding="utf-8") as f:
+            json.dump(presets, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"无法保存云端预设：{e}")
 
 def parse_config(config_str: str) -> Config:
     """解析配置，如果为空则使用默认配置"""
@@ -139,6 +179,33 @@ async def admin_login(req: Request):
         raise HTTPException(status_code=401, detail="管理员密钥不正确")
     return {"ok": True}
 
+
+@app.get("/web/api-presets")
+async def get_cloud_presets():
+    """Expose cloud API presets so guests can reuse admin-provided values."""
+    return load_cloud_presets()
+
+
+@app.post("/web/api-presets")
+async def set_cloud_presets(req: Request):
+    data = await req.json()
+    provided = str(req.headers.get("X-Admin-Key", "") or "").strip()
+    secret = os.getenv(ADMIN_SECRET_ENV)
+
+    if not secret:
+        raise HTTPException(status_code=503, detail="管理员密钥未在服务器上配置")
+    if provided != secret:
+        raise HTTPException(status_code=401, detail="管理员密钥不正确")
+
+    presets = data.get("presets") if isinstance(data, dict) else None
+    if presets is None:
+        presets = []
+    if not isinstance(presets, list):
+        raise HTTPException(status_code=400, detail="预设必须为列表")
+
+    save_cloud_presets(presets)
+    return {"ok": True, "presets": presets}
+
 @app.post("/register", response_description="no response", tags=["internal-api"])
 async def register_instance(instance: ExecutorInstance, req: Request, req_nonce: str = Header(alias="X-Nonce")):
     if req_nonce != nonce:
@@ -170,7 +237,7 @@ def transform_to_bytes(ctx):
     return to_translation(ctx).to_bytes()
 
 @app.post("/translate/json", response_model=TranslationResponse, tags=["api", "json"],response_description="json strucure inspired by the ichigo translator extension")
-async def json(req: Request, data: TranslateRequest):
+async def translate_json(req: Request, data: TranslateRequest):
     ctx = await get_ctx(req, data.config, data.image, "save_json")
     return to_translation(ctx)
 
