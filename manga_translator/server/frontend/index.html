@@ -633,6 +633,7 @@
     const PRESET_STORE = 'mt_cloud_api_presets_v2';
     const PRESET_SELECT_STORE = 'mt_cloud_api_selected_v2';
     const ADMIN_KEY_STORE = 'mt_admin_key';
+    const ADMIN_CONFIG_STORE = 'mt_admin_config_v1';
 
     const logBox = document.getElementById('log-box');
 
@@ -662,6 +663,39 @@
       const input = document.getElementById('announcement-input');
       if (guestBoard) guestBoard.textContent = announcementText;
       if (input) input.value = announcementText;
+    }
+
+    function mergeConfig(base, override) {
+      const result = clone(base);
+      const apply = (target, source) => {
+        Object.entries(source || {}).forEach(([key, value]) => {
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            target[key] = apply(target[key] && typeof target[key] === 'object' ? clone(target[key]) : {}, value);
+          } else {
+            target[key] = value;
+          }
+        });
+        return target;
+      };
+      return apply(result, override || {});
+    }
+
+    function loadSavedConfig() {
+      try {
+        const raw = localStorage.getItem(ADMIN_CONFIG_STORE);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function persistConfig() {
+      try {
+        localStorage.setItem(ADMIN_CONFIG_STORE, JSON.stringify(configData));
+      } catch (e) {
+        console.warn('无法保存配置到本地存储', e);
+      }
     }
 
     function getDisplayName(key) {
@@ -738,6 +772,7 @@
         cursor = cursor[key];
       }
       cursor[segments[segments.length - 1]] = value;
+      persistConfig();
     }
 
     function renderSection(containerId, sectionKey, sectionData) {
@@ -782,7 +817,9 @@
         const res = await fetch('/web/default-config');
         const data = await res.json();
         defaultConfig = clone(data);
-        configData = clone(data);
+        const saved = loadSavedConfig();
+        configData = saved ? mergeConfig(defaultConfig, saved) : clone(defaultConfig);
+        persistConfig();
         renderAll();
         renderGuestOptions();
         log('默认配置已载入');
@@ -793,6 +830,7 @@
 
     function resetConfig() {
       configData = clone(defaultConfig);
+      persistConfig();
       renderAll();
       log('已恢复默认配置');
     }
