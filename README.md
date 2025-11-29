@@ -178,6 +178,7 @@ python -m manga_translator --help
 4. **环境变量**：
    - Zeabur 会自动注入 `PORT`，**不要手动硬编码**。
    - 如需显式设置，可在「环境变量」中添加 `HOST=0.0.0.0`，确保服务监听所有网卡。
+   - 需设置 `WEB_CONSOLE_ADMIN_KEY=<你的管理员密钥>`，用于网页控制台的管理员登录；更改该变量即可随时轮换口令。
 5. **部署启动**：点击「部署」，等待日志中出现 `Application startup complete.` 表示启动成功。
 6. **验证访问**：
    - 打开 Zeabur 提供的域名，访问 `https://<你的域名>/docs` 查看 FastAPI 自带的交互式文档。
@@ -192,8 +193,8 @@ python -m manga_translator --help
 部署完成后，直接访问服务根路径即可进入简单的网页控制台：
 
 - 访问 `https://<你的域名>/` 或 `https://<你的域名>/console` 打开控制台界面。
-- 左侧上传漫画图片后，可在云端 API 设置里填写 **Base URL / API Key**（OpenAI 兼容），保存为多个预设。
-- 仅管理员登录后可编辑云端 API 预设；访客只能看到当前预设名称，避免误改密钥。
+- 左侧上传漫画图片后，可在云端 API 设置里填写 **Base URL / 模型名称 / API Key**（OpenAI 兼容），保存为多个预设。
+- 仅管理员登录后可编辑云端 API 预设；访客只能看到当前预设名称，避免误改密钥。管理员密钥来自环境变量 `WEB_CONSOLE_ADMIN_KEY`。
 - 点击「开始翻译」后会调用 `/translate/with-form/image`，右侧即时预览翻译结果并可下载。
 - 如果云端禁用了 `ctranslate2`（Zeabur 常见），离线翻译器会被自动跳过，建议切换到 `nllb`、`qwen2` 或云端翻译 API 预设。
 
