@@ -30,6 +30,7 @@
       display: grid;
       grid-template-columns: 1.2fr 1fr;
       gap: 20px;
+      align-items: start;
     }
     @media (max-width: 960px) {
       .container { grid-template-columns: 1fr; }
@@ -44,7 +45,7 @@
     h1 { margin: 0 0 10px; font-size: 24px; letter-spacing: 0.2px; }
     p { margin: 0 0 12px; color: var(--muted); }
     label { display: block; font-weight: 600; margin: 12px 0 6px; }
-    input[type="file"], textarea, button, select {
+    input[type="file"], textarea, button, select, input[type="text"], input[type="password"] {
       width: 100%;
       box-sizing: border-box;
       border-radius: 10px;
@@ -88,23 +89,53 @@
       white-space: pre-wrap;
     }
     .small { font-size: 13px; color: var(--muted); }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .muted { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .inline { display: inline-flex; gap: 10px; align-items: center; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <h1>Web 控制台</h1>
-      <p>上传漫画图片，自定义配置并在云端翻译。基于本地同款配置结构，直接兼容 <code>examples/config.json</code>。</p>
+      <p>上传漫画图片并在云端翻译，内置云端 API 设置（OpenAI 兼容）。</p>
 
       <label for="imageInput">选择图片</label>
       <input id="imageInput" type="file" accept="image/*" />
 
-      <label for="configInput">翻译配置 (JSON)</label>
-      <textarea id="configInput" placeholder="粘贴或编辑配置，空白时将自动加载 examples/config.json"></textarea>
-      <div class="actions">
-        <button id="loadDefault">载入示例配置</button>
-        <button id="translateBtn">开始翻译</button>
+      <div class="actions" style="justify-content: space-between; align-items: center;">
+        <div class="inline">
+          <button id="translateBtn">开始翻译</button>
+          <button id="loadDefault">重置默认配置</button>
+        </div>
+        <button id="adminBtn" style="width:auto;min-width:140px;">管理员登录</button>
       </div>
+      <div class="pill">提示：云端 API 设置仅管理员可见可改；非管理员只能看到正在使用的预设名称。</div>
+
+      <h3 style="margin:18px 0 8px;">云端 API 设置（OpenAI 兼容）</h3>
+      <div class="muted" id="presetInfo">正在加载预设...</div>
+      <div id="adminSection" style="display:none; margin-top:10px;">
+        <div class="grid-2">
+          <div>
+            <label for="presetName">预设名称</label>
+            <input id="presetName" type="text" placeholder="如：官方 / 第三方 / 本地反代" />
+          </div>
+          <div>
+            <label for="presetSelect">已保存预设</label>
+            <select id="presetSelect"></select>
+          </div>
+        </div>
+        <label for="apiBase">Base URL</label>
+        <input id="apiBase" type="text" placeholder="https://api.openai.com/v1" />
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" type="password" placeholder="sk-..." />
+        <div class="actions">
+          <button id="savePreset">保存/更新预设</button>
+          <button id="forgetAdmin">退出管理员</button>
+        </div>
+      </div>
+      <div id="readonlySection" class="muted" style="display:none;">当前使用预设：<span id="readonlyPreset">-</span></div>
+      <div class="pill">兼容 OpenAI / DeepSeek / 其他 OpenAI 格式 API，可自定义 Base URL 与密钥并保存多个预设。</div>
       <div class="pill">提示：若云端禁用了 ctranslate2，offline / m2m100 / sugoi 等离线翻译器会被自动跳过，请改用 nllb / qwen2 / 云端 API。</div>
       <div id="status" class="status" style="display:none"></div>
     </div>
@@ -121,13 +152,27 @@
 
   <script>
     const imageInput = document.getElementById('imageInput');
-    const configInput = document.getElementById('configInput');
     const translateBtn = document.getElementById('translateBtn');
     const loadDefaultBtn = document.getElementById('loadDefault');
     const statusEl = document.getElementById('status');
     const previewEl = document.getElementById('preview');
     const downloadBtn = document.getElementById('downloadBtn');
+    const adminBtn = document.getElementById('adminBtn');
+    const adminSection = document.getElementById('adminSection');
+    const presetSelect = document.getElementById('presetSelect');
+    const presetName = document.getElementById('presetName');
+    const apiBase = document.getElementById('apiBase');
+    const apiKey = document.getElementById('apiKey');
+    const savePresetBtn = document.getElementById('savePreset');
+    const presetInfo = document.getElementById('presetInfo');
+    const readonlySection = document.getElementById('readonlySection');
+    const readonlyPreset = document.getElementById('readonlyPreset');
+    const forgetAdminBtn = document.getElementById('forgetAdmin');
+    const PRESET_STORAGE_KEY = 'mt_api_presets';
+    const ADMIN_FLAG_KEY = 'mt_console_admin';
     let lastBlobUrl = null;
+    let defaultConfig = null;
+    let adminMode = false;
 
     function setStatus(text, isError = false) {
       statusEl.style.display = 'block';
@@ -137,14 +182,78 @@
       statusEl.textContent = text;
     }
 
+    function loadPresets() {
+      const stored = localStorage.getItem(PRESET_STORAGE_KEY);
+      if (stored) {
+        try { return JSON.parse(stored); } catch (_) {}
+      }
+      const fallback = [{ name: '默认 OpenAI', baseUrl: 'https://api.openai.com/v1', apiKey: '' }];
+      localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(fallback));
+      return fallback;
+    }
+
+    function savePresets(list) {
+      localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(list));
+    }
+
+    function currentPreset() {
+      const presets = loadPresets();
+      const selectedName = presetSelect.value || presets[0]?.name;
+      return presets.find(p => p.name === selectedName) || presets[0];
+    }
+
+    function renderPresets() {
+      const presets = loadPresets();
+      presetSelect.innerHTML = '';
+      presets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        presetSelect.appendChild(opt);
+      });
+      const active = presets[0];
+      if (active) {
+        presetSelect.value = active.name;
+        presetName.value = active.name;
+        apiBase.value = active.baseUrl;
+        apiKey.value = active.apiKey || '';
+        readonlyPreset.textContent = active.name;
+      }
+      presetInfo.textContent = `已保存 ${presets.length} 个预设，需管理员登录才能编辑。`;
+    }
+
+    function setAdminMode(on) {
+      adminMode = on;
+      if (on) {
+        localStorage.setItem(ADMIN_FLAG_KEY, '1');
+        adminSection.style.display = 'block';
+        readonlySection.style.display = 'none';
+        adminBtn.textContent = '管理员已登录';
+      } else {
+        localStorage.removeItem(ADMIN_FLAG_KEY);
+        adminSection.style.display = 'none';
+        readonlySection.style.display = 'block';
+        adminBtn.textContent = '管理员登录';
+      }
+    }
+
+    function syncActivePreset() {
+      const active = currentPreset();
+      if (!active) return;
+      presetName.value = active.name;
+      apiBase.value = active.baseUrl;
+      apiKey.value = active.apiKey || '';
+      readonlyPreset.textContent = active.name;
+    }
+
     async function loadDefault() {
       try {
         setStatus('正在加载示例配置...');
         const res = await fetch('/web/default-config');
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
-        configInput.value = JSON.stringify(data, null, 2);
-        setStatus('示例配置已载入，可直接修改后翻译。');
+        defaultConfig = data;
+        setStatus('示例配置已载入，将自动套用到云端 API 翻译。');
       } catch (err) {
         setStatus(`加载配置失败：${err}`, true);
       }
@@ -165,8 +274,17 @@
       try {
         const form = new FormData();
         form.append('image', imageInput.files[0]);
-        const configText = configInput.value.trim();
-        form.append('config', configText || '{}');
+
+        const preset = currentPreset();
+        const conf = defaultConfig ? JSON.parse(JSON.stringify(defaultConfig)) : {};
+        conf.translator = conf.translator || {};
+        conf.translator.translator = 'openai';
+        conf.translator.gpt_config = conf.translator.gpt_config || 'examples/gpt_config-example.yaml';
+        conf.translator.target_lang = conf.translator.target_lang || 'CHS';
+        conf.translator.high_quality_prompt_path = conf.translator.high_quality_prompt_path || 'dict/prompt_example.json';
+        form.append('config', JSON.stringify(conf));
+        form.append('api_base', preset?.baseUrl || '');
+        form.append('api_key', preset?.apiKey || '');
 
         const res = await fetch('/translate/with-form/image', { method: 'POST', body: form });
         if (!res.ok) {
@@ -197,9 +315,48 @@
       }
     }
 
+    presetSelect?.addEventListener('change', syncActivePreset);
+    savePresetBtn?.addEventListener('click', () => {
+      const name = presetName.value.trim() || '未命名预设';
+      const baseUrl = apiBase.value.trim() || 'https://api.openai.com/v1';
+      const key = apiKey.value.trim();
+      const presets = loadPresets();
+      const existing = presets.find(p => p.name === name);
+      if (existing) {
+        existing.baseUrl = baseUrl;
+        existing.apiKey = key;
+      } else {
+        presets.unshift({ name, baseUrl, apiKey: key });
+      }
+      savePresets(presets);
+      renderPresets();
+      presetSelect.value = name;
+      syncActivePreset();
+      setStatus(`预设 ${name} 已保存。`);
+    });
+
+    adminBtn.addEventListener('click', () => {
+      if (adminMode) return;
+      const pwd = prompt('请输入管理员口令（仅本地生效）：');
+      if (pwd && pwd.trim().length >= 3) {
+        setAdminMode(true);
+        setStatus('管理员模式已开启，可编辑云端 API 预设。');
+      } else {
+        setStatus('未输入口令，保持访客模式。');
+      }
+    });
+
+    forgetAdminBtn?.addEventListener('click', () => {
+      setAdminMode(false);
+      setStatus('已退出管理员，云端 API 设置仅显示预设名称。');
+    });
+
     loadDefaultBtn.addEventListener('click', loadDefault);
     translateBtn.addEventListener('click', translate);
-    // 自动加载默认配置一次
+
+    renderPresets();
+    setAdminMode(!!localStorage.getItem(ADMIN_FLAG_KEY));
+    syncActivePreset();
     loadDefault();
   </script>
 </body>

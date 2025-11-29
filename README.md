@@ -192,9 +192,10 @@ python -m manga_translator --help
 部署完成后，直接访问服务根路径即可进入简单的网页控制台：
 
 - 访问 `https://<你的域名>/` 或 `https://<你的域名>/console` 打开控制台界面。
-- 左侧可以上传漫画图片、编辑与本地一致的 `config.json` 配置（也可一键载入 `examples/config.json` 示例）。
+- 左侧上传漫画图片后，可在云端 API 设置里填写 **Base URL / API Key**（OpenAI 兼容），保存为多个预设。
+- 仅管理员登录后可编辑云端 API 预设；访客只能看到当前预设名称，避免误改密钥。
 - 点击「开始翻译」后会调用 `/translate/with-form/image`，右侧即时预览翻译结果并可下载。
-- 如果云端禁用了 `ctranslate2`（Zeabur 常见），离线翻译器会被自动跳过，建议在配置里改用 `nllb`、`qwen2` 或云端翻译 API。
+- 如果云端禁用了 `ctranslate2`（Zeabur 常见），离线翻译器会被自动跳过，建议切换到 `nllb`、`qwen2` 或云端翻译 API 预设。
 
 ### 调用示例
 
