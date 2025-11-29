@@ -967,8 +967,13 @@
         try {
           const data = await res.json();
           detail = data.detail || detail;
-        } catch (e) {
-          detail = `${detail}: ${e.message || e}`;
+        } catch {
+          try {
+            const text = await res.text();
+            if (text) detail = `${detail}: ${text}`;
+          } catch (e) {
+            detail = `${detail}: ${e.message || e}`;
+          }
         }
         throw new Error(detail);
       }
