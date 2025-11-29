@@ -37,21 +37,27 @@ server_config = {
 
 # 默认配置文件路径
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config.json')
+DEFAULT_CONFIG_FALLBACK = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config-example.json')
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
-    if os.path.exists(DEFAULT_CONFIG_PATH):
+    target_path = DEFAULT_CONFIG_PATH
+
+    if not os.path.exists(target_path) and os.path.exists(DEFAULT_CONFIG_FALLBACK):
+        target_path = DEFAULT_CONFIG_FALLBACK
+
+    if os.path.exists(target_path):
         try:
-            with open(DEFAULT_CONFIG_PATH, 'r', encoding='utf-8') as f:
+            with open(target_path, 'r', encoding='utf-8') as f:
                 config_json = f.read()
             return Config.parse_raw(config_json)
         except Exception as e:
-            print(f"[WARNING] Failed to load default config from {DEFAULT_CONFIG_PATH}: {e}")
+            print(f"[WARNING] Failed to load default config from {target_path}: {e}")
             return Config()
-    else:
-        print(f"[WARNING] Default config file not found: {DEFAULT_CONFIG_PATH}")
-        return Config()
+
+    print(f"[WARNING] Default config file not found: {DEFAULT_CONFIG_PATH}")
+    return Config()
 
 def parse_config(config_str: str) -> Config:
     """解析配置，如果为空则使用默认配置"""
