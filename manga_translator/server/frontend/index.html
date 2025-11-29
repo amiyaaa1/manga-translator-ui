@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manga Translator Web 控制台</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0b1622;
+      --panel: #111c2a;
+      --primary: #4f46e5;
+      --text: #e5e7eb;
+      --border: #243447;
+      --muted: #9ca3af;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px;
+      box-sizing: border-box;
+    }
+    .container {
+      width: min(1200px, 100%);
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 960px) {
+      .container { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 18px 22px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+    }
+    h1 { margin: 0 0 10px; font-size: 24px; letter-spacing: 0.2px; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    label { display: block; font-weight: 600; margin: 12px 0 6px; }
+    input[type="file"], textarea, button, select {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0b1622;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    textarea { min-height: 240px; resize: vertical; font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace; }
+    button {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      box-shadow: 0 10px 30px rgba(99,102,241,0.35);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(99,102,241,0.45); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .actions { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+    .pill {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .preview-box { background: #0b1622; border: 1px dashed var(--border); border-radius: 12px; padding: 12px; min-height: 320px; display: flex; align-items: center; justify-content: center; }
+    .preview-box img { max-width: 100%; border-radius: 12px; }
+    .status {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(79,70,229,0.14);
+      color: #c7d2fe;
+      border: 1px solid rgba(99,102,241,0.35);
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .small { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Web 控制台</h1>
+      <p>上传漫画图片，自定义配置并在云端翻译。基于本地同款配置结构，直接兼容 <code>examples/config.json</code>。</p>
+
+      <label for="imageInput">选择图片</label>
+      <input id="imageInput" type="file" accept="image/*" />
+
+      <label for="configInput">翻译配置 (JSON)</label>
+      <textarea id="configInput" placeholder="粘贴或编辑配置，空白时将自动加载 examples/config.json"></textarea>
+      <div class="actions">
+        <button id="loadDefault">载入示例配置</button>
+        <button id="translateBtn">开始翻译</button>
+      </div>
+      <div class="pill">提示：若云端禁用了 ctranslate2，offline / m2m100 / sugoi 等离线翻译器会被自动跳过，请改用 nllb / qwen2 / 云端 API。</div>
+      <div id="status" class="status" style="display:none"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">结果预览</h2>
+      <div id="preview" class="preview-box">等待翻译...</div>
+      <div class="actions">
+        <button id="downloadBtn" disabled>下载结果</button>
+      </div>
+      <div class="small">接口：POST /translate/with-form/image · 可在 /docs 查看所有参数</div>
+    </div>
+  </div>
+
+  <script>
+    const imageInput = document.getElementById('imageInput');
+    const configInput = document.getElementById('configInput');
+    const translateBtn = document.getElementById('translateBtn');
+    const loadDefaultBtn = document.getElementById('loadDefault');
+    const statusEl = document.getElementById('status');
+    const previewEl = document.getElementById('preview');
+    const downloadBtn = document.getElementById('downloadBtn');
+    let lastBlobUrl = null;
+
+    function setStatus(text, isError = false) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = isError ? 'rgba(248,113,113,0.12)' : 'rgba(79,70,229,0.14)';
+      statusEl.style.borderColor = isError ? 'rgba(248,113,113,0.4)' : 'rgba(99,102,241,0.35)';
+      statusEl.style.color = isError ? '#fecdd3' : '#c7d2fe';
+      statusEl.textContent = text;
+    }
+
+    async function loadDefault() {
+      try {
+        setStatus('正在加载示例配置...');
+        const res = await fetch('/web/default-config');
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        configInput.value = JSON.stringify(data, null, 2);
+        setStatus('示例配置已载入，可直接修改后翻译。');
+      } catch (err) {
+        setStatus(`加载配置失败：${err}`, true);
+      }
+    }
+
+    async function translate() {
+      if (!imageInput.files.length) {
+        setStatus('请先选择一张图片。', true);
+        return;
+      }
+      translateBtn.disabled = true;
+      loadDefaultBtn.disabled = true;
+      setStatus('正在上传并翻译，请稍候...');
+      previewEl.textContent = '处理中...';
+      downloadBtn.disabled = true;
+      if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+
+      try {
+        const form = new FormData();
+        form.append('image', imageInput.files[0]);
+        const configText = configInput.value.trim();
+        form.append('config', configText || '{}');
+
+        const res = await fetch('/translate/with-form/image', { method: 'POST', body: form });
+        if (!res.ok) {
+          const message = await res.text();
+          throw new Error(message || `HTTP ${res.status}`);
+        }
+        const blob = await res.blob();
+        lastBlobUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        img.src = lastBlobUrl;
+        img.onload = () => URL.revokeObjectURL(img.src);
+        previewEl.innerHTML = '';
+        previewEl.appendChild(img);
+        downloadBtn.disabled = false;
+        setStatus('翻译完成，如需下载请点击下方按钮。');
+        downloadBtn.onclick = () => {
+          const link = document.createElement('a');
+          link.href = lastBlobUrl;
+          link.download = 'translated.png';
+          link.click();
+        };
+      } catch (err) {
+        setStatus(`翻译失败：${err.message || err}`, true);
+        previewEl.textContent = '处理失败，请检查配置或更换翻译器。';
+      } finally {
+        translateBtn.disabled = false;
+        loadDefaultBtn.disabled = false;
+      }
+    }
+
+    loadDefaultBtn.addEventListener('click', loadDefault);
+    translateBtn.addEventListener('click', translate);
+    // 自动加载默认配置一次
+    loadDefault();
+  </script>
+</body>
+</html>

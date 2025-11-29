@@ -36,6 +36,7 @@ server_config = {
 
 # 默认配置文件路径
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config.json')
+FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
@@ -70,6 +71,27 @@ app.add_middleware(
 # 添加result文件夹静态文件服务
 if os.path.exists("../result"):
     app.mount("/result", StaticFiles(directory="../result"), name="result")
+
+# 挂载 Web 控制台静态资源（Zeabur 等云端访问）
+if FRONTEND_DIR.exists():
+    app.mount("/console", StaticFiles(directory=FRONTEND_DIR, html=True), name="console")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root_page():
+    if FRONTEND_DIR.joinpath("index.html").exists():
+        return FileResponse(FRONTEND_DIR / "index.html")
+    return HTMLResponse(
+        "<h3>Manga Translator API Server</h3><p>Open <a href=\"/docs\">/docs</a> for API docs.</p>",
+        status_code=200,
+    )
+
+
+@app.get("/web/default-config")
+async def default_config():
+    """Expose the bundled example config for the Web 控制台."""
+    config = load_default_config()
+    return config.model_dump()
 
 @app.post("/register", response_description="no response", tags=["internal-api"])
 async def register_instance(instance: ExecutorInstance, req: Request, req_nonce: str = Header(alias="X-Nonce")):
