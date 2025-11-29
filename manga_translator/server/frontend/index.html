@@ -301,6 +301,7 @@
     .guest-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; margin-top: 12px; }
     .guest-options label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; color: #1f2937; }
     .guest-options select { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; color: #0f172a; }
+    .guest-toggle { display: flex; align-items: center; gap: 8px; font-weight: 500; color: #475569; }
     .guest-btn { width: 100%; margin-top: 16px; padding: 12px 14px; border-radius: 12px; border: none; background: linear-gradient(90deg,#0ea5e9,#38bdf8); color: #fff; font-weight: 700; cursor: pointer; box-shadow: 0 14px 30px rgba(56,189,248,0.25); }
     .guest-btn:active { transform: translateY(1px); }
     .guest-announcement { margin-top: 10px; padding: 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; line-height: 1.6; white-space: pre-wrap; }
@@ -343,6 +344,12 @@
           </label>
           <label>OCR 模型
             <select id="guest-ocr"></select>
+          </label>
+          <label>ai断句
+            <div class="guest-toggle">
+              <input id="guest-auto-wrap" type="checkbox" />
+              <span>使用 AI 断句，避免自动换行</span>
+            </div>
           </label>
         </div>
         <button id="guest-translate-btn" class="guest-btn">开始翻译</button>
@@ -523,7 +530,7 @@
       renderer: '渲染器',
       alignment: '对齐方式',
       disable_font_border: '关闭描边',
-      disable_auto_wrap: '关闭自动换行',
+      disable_auto_wrap: 'ai断句',
       font_size_offset: '字号偏移',
       font_size_minimum: '最小字号',
       max_font_size: '最大字号',
@@ -945,11 +952,16 @@
       const targetSelect = document.getElementById('guest-target');
       const detectorSelect = document.getElementById('guest-detector');
       const ocrSelect = document.getElementById('guest-ocr');
+      const autoWrapToggle = document.getElementById('guest-auto-wrap');
       if (!presetSelect) return;
 
       populateSelect(targetSelect, ENUM_OPTIONS.target_lang || [], configData?.translator?.target_lang || 'CHS');
       populateSelect(detectorSelect, ENUM_OPTIONS.detector || [], configData?.detector?.detector || 'default');
       populateSelect(ocrSelect, ENUM_OPTIONS.ocr || [], configData?.ocr?.ocr || 'mocr');
+      if (autoWrapToggle) {
+        autoWrapToggle.checked = !!configData?.render?.disable_auto_wrap;
+        autoWrapToggle.onchange = () => updateConfigValue('render.disable_auto_wrap', autoWrapToggle.checked);
+      }
 
       presetSelect.innerHTML = '';
       const empty = document.createElement('option');
@@ -1268,9 +1280,11 @@
       guestConfig.translator = guestConfig.translator || {};
       guestConfig.detector = guestConfig.detector || {};
       guestConfig.ocr = guestConfig.ocr || {};
+      guestConfig.render = guestConfig.render || {};
       guestConfig.translator.target_lang = document.getElementById('guest-target').value;
       guestConfig.detector.detector = document.getElementById('guest-detector').value;
       guestConfig.ocr.ocr = document.getElementById('guest-ocr').value;
+      guestConfig.render.disable_auto_wrap = document.getElementById('guest-auto-wrap')?.checked || false;
       fd.append('config', JSON.stringify(guestConfig));
       if (preset) {
         if (preset.api_base) fd.append('api_base', preset.api_base);
