@@ -64,6 +64,10 @@ def set_main_logger(l):
     global logger
     logger = l
 
+
+_GLOBAL_MODELS_LOCK = asyncio.Lock()
+_GLOBAL_MODELS_READY = False
+
 class TranslationInterrupt(Exception):
     """
     Can be raised from within a progress hook to prematurely terminate
@@ -133,14 +137,15 @@ class MangaTranslator:
         self._add_logger_hook()
 
         params = params or {}
-        
+
         self._batch_contexts = []  # 存储批量处理的上下文
         self._batch_configs = []   # 存储批量处理的配置
         # batch_concurrent 会在 parse_init_params 中验证并设置
         self.batch_concurrent = params.get('batch_concurrent', False)
-        
+
         # 添加模型加载状态标志
         self._models_loaded = False
+        self._model_load_lock = asyncio.Lock()
         
         self.parse_init_params(params)
         self.result_sub_folder = ''
@@ -2397,6 +2402,67 @@ class MangaTranslator:
         logger.info(f"Batch translation completed: processed {len(results)} images")
         return results
 
+    async def _load_all_models(self, config: Config):
+        logger.info('Loading models')
+
+        if config.upscale.upscale_ratio:
+            # 传递超分配置参数
+            upscaler_kwargs = {}
+            if config.upscale.upscaler == 'realcugan':
+                if config.upscale.realcugan_model:
+                    upscaler_kwargs['model_name'] = config.upscale.realcugan_model
+                if config.upscale.tile_size is not None:
+                    upscaler_kwargs['tile_size'] = config.upscale.tile_size
+            await prepare_upscaling(config.upscale.upscaler, **upscaler_kwargs)
+
+        await prepare_detection(config.detector.detector)
+
+        await prepare_ocr(config.ocr.ocr, self.device)
+
+        await prepare_inpainting(config.inpainter.inpainter, self.device)
+
+        await prepare_translation(config.translator.translator_gen)
+
+        if config.colorizer.colorizer != Colorizer.none:
+            await prepare_colorization(config.colorizer.colorizer)
+
+        logger.info('[DEBUG-2] Models loaded and flag set to True')
+
+    async def _ensure_models_loaded(self, config: Config):
+        global _GLOBAL_MODELS_READY
+
+        logger.debug(f'[DEBUG-2] Checking model load: models_ttl={self.models_ttl}, _models_loaded={self._models_loaded}')
+
+        # Keep models warm globally when TTL is disabled to prevent redundant downloads.
+        if self.models_ttl == 0:
+            if self._models_loaded or _GLOBAL_MODELS_READY:
+                self._models_loaded = True
+                logger.debug('[DEBUG-2] Skipping model load - already loaded or globally warmed')
+                return
+
+            async with _GLOBAL_MODELS_LOCK:
+                if _GLOBAL_MODELS_READY:
+                    self._models_loaded = True
+                    logger.debug('[DEBUG-2] Skipping model load - already warmed during wait')
+                    return
+
+                await self._load_all_models(config)
+                _GLOBAL_MODELS_READY = True
+                self._models_loaded = True
+            return
+
+        # For non-zero TTL, keep per-instance lifecycle.
+        if self._models_loaded:
+            logger.debug('[DEBUG-2] Skipping model load - already loaded for this instance')
+            return
+
+        async with self._model_load_lock:
+            if self._models_loaded:
+                logger.debug('[DEBUG-2] Skipping model load - already loaded after waiting')
+                return
+            await self._load_all_models(config)
+            self._models_loaded = True
+
     async def _translate_until_translation(self, image: Image.Image, config: Config) -> Context:
         """
         执行翻译之前的所有步骤（彩色化、上采样、检测、OCR、文本行合并）
@@ -2418,37 +2484,7 @@ class MangaTranslator:
                 logger.error(f"Error saving input.png debug image: {e}")
                 logger.debug(f"Exception details: {traceback.format_exc()}")
 
-        # preload and download models (not strictly necessary, remove to lazy load)
-        logger.debug(f'[DEBUG-2] Checking model load: models_ttl={self.models_ttl}, _models_loaded={self._models_loaded}')
-        
-        if ( self.models_ttl == 0 and not self._models_loaded ):
-            logger.info('Loading models')
-            
-            if config.upscale.upscale_ratio:
-                # 传递超分配置参数
-                upscaler_kwargs = {}
-                if config.upscale.upscaler == 'realcugan':
-                    if config.upscale.realcugan_model:
-                        upscaler_kwargs['model_name'] = config.upscale.realcugan_model
-                    if config.upscale.tile_size is not None:
-                        upscaler_kwargs['tile_size'] = config.upscale.tile_size
-                await prepare_upscaling(config.upscale.upscaler, **upscaler_kwargs)
-            
-            await prepare_detection(config.detector.detector)
-            
-            await prepare_ocr(config.ocr.ocr, self.device)
-            
-            await prepare_inpainting(config.inpainter.inpainter, self.device)
-            
-            await prepare_translation(config.translator.translator_gen)
-            
-            if config.colorizer.colorizer != Colorizer.none:
-                await prepare_colorization(config.colorizer.colorizer)
-            
-            self._models_loaded = True  # 标记模型已加载
-            logger.info('[DEBUG-2] Models loaded and flag set to True')
-        else:
-            logger.debug('[DEBUG-2] Skipping model load - already loaded or TTL enabled')
+        await self._ensure_models_loaded(config)
 
         # Start the background cleanup job once if not already started.
         if self._detector_cleanup_task is None:

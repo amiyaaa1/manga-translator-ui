@@ -19,6 +19,7 @@ from pathlib import Path
 
 from manga_translator import Config
 from manga_translator.config import Translator
+from manga_translator.server.concurrency import set_limit as set_translation_limit
 from manga_translator.server.instance import ExecutorInstance, executor_instances
 from manga_translator.server.myqueue import task_queue
 from manga_translator.server.request_extraction import get_ctx, while_streaming, TranslateRequest, BatchTranslateRequest, get_batch_ctx
@@ -66,6 +67,7 @@ EXECUTOR_MAX_CONCURRENCY = _parse_max_concurrency(
     MAX_CONCURRENCY_DEFAULT,
 )
 executor_instances.set_limit(EXECUTOR_MAX_CONCURRENCY)
+set_translation_limit(EXECUTOR_MAX_CONCURRENCY)
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
