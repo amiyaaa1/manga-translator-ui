@@ -61,13 +61,8 @@ uvicorn==0.35.0
 websockets==14.2
 # xformers==0.0.32.post2  # CPU版本不需要,仅GPU使用
 google-generativeai==0.8.5
-# pydensecrf - 预编译 wheel 文件 (Python 3.12 Windows)
-# 国内用户推荐使用镜像站,下载速度更快
-pydensecrf @ https://gh-proxy.com/https://github.com/hgmzhn/manga-translator-ui/releases/download/v1.7.6/pydensecrf-1.0-cp312-cp312-win_amd64.whl
-# 如果镜像站失效,可使用官方源:
-# pydensecrf @ https://github.com/hgmzhn/manga-translator-ui/releases/download/v1.7.6/pydensecrf-1.0-cp312-cp312-win_amd64.whl
-# 或从源码安装(需要 C++ 编译工具):
-# pydensecrf @ git+https://github.com/lucasb-eyer/pydensecrf.git
+# pydensecrf - 使用 Git 源码构建, 兼容 Linux 云端环境
+pydensecrf @ git+https://github.com/lucasb-eyer/pydensecrf.git@2723c7fa4f2ead16ae1ce3d8afe977724bb8f87f
 deepl==1.22.0
 groq==0.31.0
 torchsummary==1.5.1

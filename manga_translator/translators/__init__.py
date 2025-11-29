@@ -1,4 +1,5 @@
 from typing import Optional, List
+import logging
 
 import py3langid as langid
 
@@ -11,10 +12,28 @@ from .papago import PapagoTranslator
 from .caiyun import CaiyunTranslator
 from .openai import OpenAITranslator
 from .nllb import NLLBTranslator, NLLBBigTranslator
-from .sugoi import JparacrawlTranslator, JparacrawlBigTranslator, SugoiTranslator
-from .m2m100 import M2M100Translator, M2M100BigTranslator
+try:
+    from .sugoi import JparacrawlTranslator, JparacrawlBigTranslator, SugoiTranslator
+    _SUGOI_AVAILABLE = True
+    _SUGOI_ERROR = None
+except Exception as exc:  # pragma: no cover - defensive import guard for cloud envs
+    _SUGOI_AVAILABLE = False
+    _SUGOI_ERROR = exc
+try:
+    from .m2m100 import M2M100Translator, M2M100BigTranslator
+    _M2M100_AVAILABLE = True
+    _M2M100_ERROR = None
+except Exception as exc:  # pragma: no cover - defensive import guard for cloud envs
+    _M2M100_AVAILABLE = False
+    _M2M100_ERROR = exc
 from .mbart50 import MBart50Translator
-from .selective import SelectiveOfflineTranslator, prepare as prepare_selective_translator
+try:
+    from .selective import SelectiveOfflineTranslator, prepare as prepare_selective_translator
+    _SELECTIVE_AVAILABLE = True
+    _SELECTIVE_ERROR = None
+except Exception as exc:  # pragma: no cover - defensive import guard for cloud envs
+    _SELECTIVE_AVAILABLE = False
+    _SELECTIVE_ERROR = exc
 from .none import NoneTranslator
 from .original import OriginalTranslator
 from .sakura import SakuraTranslator
@@ -27,18 +46,32 @@ from ..config import Config, Translator, TranslatorConfig, TranslatorChain
 from ..utils import Context
 
 OFFLINE_TRANSLATORS = {
-    Translator.offline: SelectiveOfflineTranslator,
     Translator.nllb: NLLBTranslator,
     Translator.nllb_big: NLLBBigTranslator,
-    Translator.sugoi: SugoiTranslator,
-    Translator.jparacrawl: JparacrawlTranslator,
-    Translator.jparacrawl_big: JparacrawlBigTranslator,
-    Translator.m2m100: M2M100Translator,
-    Translator.m2m100_big: M2M100BigTranslator,
     Translator.mbart50: MBart50Translator,
     Translator.qwen2: Qwen2Translator,
     Translator.qwen2_big: Qwen2BigTranslator,
 }
+
+if _M2M100_AVAILABLE:
+    OFFLINE_TRANSLATORS.update(
+        {
+            Translator.m2m100: M2M100Translator,
+            Translator.m2m100_big: M2M100BigTranslator,
+        }
+    )
+
+if _SUGOI_AVAILABLE:
+    OFFLINE_TRANSLATORS.update(
+        {
+            Translator.sugoi: SugoiTranslator,
+            Translator.jparacrawl: JparacrawlTranslator,
+            Translator.jparacrawl_big: JparacrawlBigTranslator,
+        }
+    )
+
+if _SELECTIVE_AVAILABLE:
+    OFFLINE_TRANSLATORS.update({Translator.offline: SelectiveOfflineTranslator})
 
 GPT_TRANSLATORS = {
     Translator.openai: OpenAITranslator,
@@ -64,7 +97,47 @@ TRANSLATORS = {
 }
 translator_cache = {}
 
+
+def _ensure_available(key: Translator):
+    if key in {Translator.sugoi, Translator.jparacrawl, Translator.jparacrawl_big} and not _SUGOI_AVAILABLE:
+        logging.getLogger(__name__).warning(
+            "Translator '%s' is unavailable because ctranslate2 failed to load (%s). "
+            "Use another translator (e.g., nllb, qwen2, or cloud providers) or rebuild the image with executable stack enabled.",
+            key,
+            _SUGOI_ERROR,
+        )
+        raise ImportError(
+            "Translator '%s' is disabled: ctranslate2 backend could not be imported."
+            " Set --translator to a different option for cloud deployments." % key
+        )
+
+    if key in {Translator.m2m100, Translator.m2m100_big} and not _M2M100_AVAILABLE:
+        logging.getLogger(__name__).warning(
+            "Translator '%s' is unavailable because ctranslate2 failed to load (%s). "
+            "Use another translator (e.g., nllb, qwen2, or cloud providers) or rebuild the image with executable stack enabled.",
+            key,
+            _M2M100_ERROR,
+        )
+        raise ImportError(
+            "Translator '%s' is disabled: ctranslate2 backend could not be imported."
+            " Set --translator to a different option for cloud deployments." % key
+        )
+
+    if key is Translator.offline and not _SELECTIVE_AVAILABLE:
+        logging.getLogger(__name__).warning(
+            "Translator '%s' is unavailable because required offline backends failed to load (%s). "
+            "Use another translator (e.g., nllb, qwen2, or cloud providers) or rebuild the image with executable stack enabled.",
+            key,
+            _SELECTIVE_ERROR,
+        )
+        raise ImportError(
+            "Translator '%s' is disabled: offline bundle backends could not be imported."
+            " Set --translator to a different option for cloud deployments." % key
+        )
+
+
 def get_translator(key: Translator, *args, **kwargs) -> CommonTranslator:
+    _ensure_available(key)
     if key not in TRANSLATORS:
         raise ValueError(f'Could not find translator for: "{key}". Choose from the following: %s' % ','.join(TRANSLATORS))
     # Use cache to avoid reloading models in the same translation session
@@ -73,7 +146,8 @@ def get_translator(key: Translator, *args, **kwargs) -> CommonTranslator:
         translator_cache[key] = translator(*args, **kwargs)
     return translator_cache[key]
 
-prepare_selective_translator(get_translator)
+if _SELECTIVE_AVAILABLE:
+    prepare_selective_translator(get_translator)
 
 async def prepare(chain: TranslatorChain):
     for key, tgt_lang in chain.chain:

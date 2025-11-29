@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from manga_translator import Config
+from manga_translator.config import Translator
 from manga_translator.server.instance import ExecutorInstance, executor_instances
 from manga_translator.server.myqueue import task_queue
 from manga_translator.server.request_extraction import get_ctx, while_streaming, TranslateRequest, BatchTranslateRequest, get_batch_ctx
@@ -36,20 +37,27 @@ server_config = {
 
 # 默认配置文件路径
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config.json')
+DEFAULT_CONFIG_FALLBACK = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config-example.json')
+FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
-    if os.path.exists(DEFAULT_CONFIG_PATH):
+    target_path = DEFAULT_CONFIG_PATH
+
+    if not os.path.exists(target_path) and os.path.exists(DEFAULT_CONFIG_FALLBACK):
+        target_path = DEFAULT_CONFIG_FALLBACK
+
+    if os.path.exists(target_path):
         try:
-            with open(DEFAULT_CONFIG_PATH, 'r', encoding='utf-8') as f:
+            with open(target_path, 'r', encoding='utf-8') as f:
                 config_json = f.read()
             return Config.parse_raw(config_json)
         except Exception as e:
-            print(f"[WARNING] Failed to load default config from {DEFAULT_CONFIG_PATH}: {e}")
+            print(f"[WARNING] Failed to load default config from {target_path}: {e}")
             return Config()
-    else:
-        print(f"[WARNING] Default config file not found: {DEFAULT_CONFIG_PATH}")
-        return Config()
+
+    print(f"[WARNING] Default config file not found: {DEFAULT_CONFIG_PATH}")
+    return Config()
 
 def parse_config(config_str: str) -> Config:
     """解析配置，如果为空则使用默认配置"""
@@ -58,6 +66,33 @@ def parse_config(config_str: str) -> Config:
         return load_default_config()
     else:
         return Config.parse_raw(config_str)
+
+
+ADMIN_SECRET_ENV = "WEB_CONSOLE_ADMIN_KEY"
+
+
+def apply_cloud_api_settings(conf: Config, api_base: str | None, api_key: str | None, api_model: str | None) -> Config:
+    """Apply OpenAI/compatible API settings for the current request."""
+    if not api_base and not api_key and not api_model:
+        return conf
+
+    if api_base:
+        os.environ['OPENAI_API_BASE'] = api_base
+    if api_key:
+        os.environ['OPENAI_API_KEY'] = api_key
+    if api_model:
+        os.environ['OPENAI_MODEL'] = api_model
+
+    # 强制切到云端翻译器，避免触发云端不支持的离线模型
+    try:
+        conf.translator.translator = Translator.openai
+        if not conf.translator.target_lang:
+            conf.translator.target_lang = 'CHS'
+        conf.translator.gpt_config = conf.translator.gpt_config or 'examples/gpt_config-example.yaml'
+        conf.translator.high_quality_prompt_path = conf.translator.high_quality_prompt_path or 'dict/prompt_example.json'
+    except Exception:
+        pass
+    return conf
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +105,39 @@ app.add_middleware(
 # 添加result文件夹静态文件服务
 if os.path.exists("../result"):
     app.mount("/result", StaticFiles(directory="../result"), name="result")
+
+# 挂载 Web 控制台静态资源（Zeabur 等云端访问）
+if FRONTEND_DIR.exists():
+    app.mount("/console", StaticFiles(directory=FRONTEND_DIR, html=True), name="console")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root_page():
+    if FRONTEND_DIR.joinpath("index.html").exists():
+        return FileResponse(FRONTEND_DIR / "index.html")
+    return HTMLResponse(
+        "<h3>Manga Translator API Server</h3><p>Open <a href=\"/docs\">/docs</a> for API docs.</p>",
+        status_code=200,
+    )
+
+
+@app.get("/web/default-config")
+async def default_config():
+    """Expose the bundled example config for the Web 控制台."""
+    config = load_default_config()
+    return config.model_dump()
+
+
+@app.post("/web/admin-login")
+async def admin_login(req: Request):
+    data = await req.json()
+    provided = str(data.get("key", "") or "").strip()
+    secret = os.getenv(ADMIN_SECRET_ENV)
+    if not secret:
+        raise HTTPException(status_code=503, detail="管理员密钥未在服务器上配置")
+    if provided != secret:
+        raise HTTPException(status_code=401, detail="管理员密钥不正确")
+    return {"ok": True}
 
 @app.post("/register", response_description="no response", tags=["internal-api"])
 async def register_instance(instance: ExecutorInstance, req: Request, req_nonce: str = Header(alias="X-Nonce")):
@@ -137,23 +205,23 @@ async def stream_image(req: Request, data: TranslateRequest) -> StreamingRespons
     return await while_streaming(req, transform_to_image, data.config, data.image, "normal")
 
 @app.post("/translate/with-form/json", response_model=TranslationResponse, tags=["api", "form"],response_description="json strucure inspired by the ichigo translator extension")
-async def json_form(req: Request, image: UploadFile = File(...), config: str = Form("{}")):
+async def json_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None)):
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     ctx = await get_ctx(req, conf, img, "save_json")
     return to_translation(ctx)
 
 @app.post("/translate/with-form/bytes", response_class=StreamingResponse, tags=["api", "form"],response_description="custom byte structure for decoding look at examples in 'examples/response.*'")
-async def bytes_form(req: Request, image: UploadFile = File(...), config: str = Form("{}")):
+async def bytes_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None)):
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     ctx = await get_ctx(req, conf, img, "save_json")
     return StreamingResponse(content=to_translation(ctx).to_bytes())
 
 @app.post("/translate/with-form/image", response_description="the result image", tags=["api", "form"],response_class=StreamingResponse)
-async def image_form(req: Request, image: UploadFile = File(...), config: str = Form("{}")) -> StreamingResponse:
+async def image_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None)) -> StreamingResponse:
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     ctx = await get_ctx(req, conf, img, "normal")
     
     if not ctx.result:
@@ -166,9 +234,9 @@ async def image_form(req: Request, image: UploadFile = File(...), config: str = 
     return StreamingResponse(img_byte_arr, media_type="image/png")
 
 @app.post("/translate/with-form/json/stream", response_class=StreamingResponse, tags=["api", "form"],response_description="A stream over elements with strucure(1byte status, 4 byte size, n byte data) status code are 0,1,2,3,4 0 is result data, 1 is progress report, 2 is error, 3 is waiting queue position, 4 is waiting for translator instance")
-async def stream_json_form(req: Request, image: UploadFile = File(...), config: str = Form("{}")) -> StreamingResponse:
+async def stream_json_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None)) -> StreamingResponse:
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     # 标记这是Web前端调用，用于占位符优化
     conf._is_web_frontend = True
     return await while_streaming(req, transform_to_json, conf, img, "save_json")
@@ -176,25 +244,25 @@ async def stream_json_form(req: Request, image: UploadFile = File(...), config: 
 
 
 @app.post("/translate/with-form/bytes/stream", response_class=StreamingResponse,tags=["api", "form"], response_description="A stream over elements with strucure(1byte status, 4 byte size, n byte data) status code are 0,1,2,3,4 0 is result data, 1 is progress report, 2 is error, 3 is waiting queue position, 4 is waiting for translator instance")
-async def stream_bytes_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"))-> StreamingResponse:
+async def stream_bytes_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None))-> StreamingResponse:
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     return await while_streaming(req, transform_to_bytes, conf, img, "save_json")
 
 @app.post("/translate/with-form/image/stream", response_class=StreamingResponse, tags=["api", "form"], response_description="Standard streaming endpoint - returns complete image data. Suitable for API calls and scripts.")
-async def stream_image_form(req: Request, image: UploadFile = File(...), config: str = Form("{}")) -> StreamingResponse:
+async def stream_image_form(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None)) -> StreamingResponse:
     """通用流式端点：返回完整图片数据，适用于API调用和comicread脚本"""
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     # 标记为通用模式，不使用占位符优化
     conf._web_frontend_optimized = False
     return await while_streaming(req, transform_to_image, conf, img, "normal")
 
 @app.post("/translate/with-form/image/stream/web", response_class=StreamingResponse, tags=["api", "form"], response_description="Web frontend optimized streaming endpoint - uses placeholder optimization for faster response.")
-async def stream_image_form_web(req: Request, image: UploadFile = File(...), config: str = Form("{}")) -> StreamingResponse:
+async def stream_image_form_web(req: Request, image: UploadFile = File(...), config: str = Form("{}"), api_base: str | None = Form(None), api_key: str | None = Form(None), api_model: str | None = Form(None)) -> StreamingResponse:
     """Web前端专用端点：使用占位符优化，提供极速体验"""
     img = await image.read()
-    conf = parse_config(config)
+    conf = apply_cloud_api_settings(parse_config(config), api_base, api_key, api_model)
     # 标记为Web前端优化模式，使用占位符优化
     conf._web_frontend_optimized = True
     return await while_streaming(req, transform_to_image, conf, img, "normal")

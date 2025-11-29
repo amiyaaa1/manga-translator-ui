@@ -18,5 +18,5 @@ RUN pip install --no-cache-dir -r requirements_cpu.txt
 # 暴露 Web API 端口
 EXPOSE 8000
 
-# 默认启动 Web 模式服务
-CMD ["python", "-m", "manga_translator", "web", "--host", "0.0.0.0", "--port", "8000"]
+# 默认启动 Web 模式服务，自动读取平台提供的 PORT 环境变量
+CMD ["sh", "-c", "python -m manga_translator web --host 0.0.0.0 --port ${PORT:-8000}"]

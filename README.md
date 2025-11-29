@@ -154,6 +154,64 @@ python -m manga_translator --help
 
 ---
 
+## ☁️ Zeabur 云端部署（Web API）
+
+> 适合想把 Web API 部署到云端、方便与第三方系统对接的同学。
+
+### 改了什么？
+
+- Web 模式默认读取 `HOST` / `PORT` 环境变量，并在缺省时回退到 `0.0.0.0:8000`，以适配 Zeabur 等平台的端口分配。
+- Docker 镜像的默认启动命令改为 `python -m manga_translator web --host 0.0.0.0 --port ${PORT:-8000}`，无需手动传参即可在 Zeabur 运行。
+- Zeabur 默认禁止 `executable stack`，会导致基于 `ctranslate2` 的离线翻译器（Sugoi/Jparacrawl、M2M100、默认的 `offline` 组合）无法加载。容器会自动跳过这些翻译器，请在云端改用其他翻译器（如 `--translator nllb` / `--translator qwen2` 或云端 GPT/翻译服务）。
+
+### 部署前准备
+
+1. 一个 Zeabur 账号（新用户按向导完成注册）。
+2. 本仓库的代码托管在你可访问的 GitHub 账号（直接使用本仓库也可以）。
+3. 默认使用 CPU 运行，Zeabur 免费方案无需额外硬件配置。
+
+### Zeabur 新手向导
+
+1. **创建项目**：登录 Zeabur 后点击「新建项目」，输入任意名称，确认创建。
+2. **添加服务**：在项目内选择「创建服务」 →「从代码仓库」，绑定你的 GitHub 账号并选择本仓库。Zeabur 会自动检测到根目录的 `Dockerfile`。
+3. **构建设置**：保持默认构建命令（Zeabur 会直接用 Dockerfile 构建镜像），无需额外修改。
+4. **环境变量**：
+   - Zeabur 会自动注入 `PORT`，**不要手动硬编码**。
+   - 如需显式设置，可在「环境变量」中添加 `HOST=0.0.0.0`，确保服务监听所有网卡。
+   - 需设置 `WEB_CONSOLE_ADMIN_KEY=<你的管理员密钥>`，用于网页控制台的管理员登录；更改该变量即可随时轮换口令。
+5. **部署启动**：点击「部署」，等待日志中出现 `Application startup complete.` 表示启动成功。
+6. **验证访问**：
+   - 打开 Zeabur 提供的域名，访问 `https://<你的域名>/docs` 查看 FastAPI 自带的交互式文档。
+   - 使用 `curl` 进行健康检查：
+     ```bash
+     curl -I https://<你的域名>/docs
+     ```
+7. **更新版本**：仓库更新后，回到 Zeabur 服务页面点击「重新部署」即可拉取最新代码。
+
+### 在线 Web 控制台（Zeabur / 任意云端）
+
+部署完成后，直接访问服务根路径即可进入简单的网页控制台：
+
+- 访问 `https://<你的域名>/` 或 `https://<你的域名>/console` 打开控制台界面。
+- 网页端已重构为与本地 Qt 界面相同的布局：左侧文件列表 + 右侧「基础/高级/选项/日志」完整设置面板，字段名称与本地保持一致。
+- 左侧上传漫画图片后，可在云端 API 设置里填写 **Base URL / 模型名称 / API Key**（OpenAI 兼容），保存为多个预设。
+- 仅管理员登录后可编辑云端 API 预设；访客只能看到当前预设名称，避免误改密钥。管理员密钥来自环境变量 `WEB_CONSOLE_ADMIN_KEY`。
+- 点击「开始翻译」后会调用 `/translate/with-form/image`，右侧即时预览翻译结果并可下载。
+- 如果云端禁用了 `ctranslate2`（Zeabur 常见），离线翻译器会被自动跳过，建议切换到 `nllb`、`qwen2` 或云端翻译 API 预设。
+
+### 调用示例
+
+```bash
+# 替换成 Zeabur 自动分配的域名
+curl -X POST "https://<你的域名>/translate" \
+     -H "Content-Type: application/json" \
+     -d '{"image_url": "https://example.com/manga.jpg"}'
+```
+
+> 提示：如需关闭自动缓存或调整并发，可在请求体中传入对应参数，具体可在 `/docs` 页面查看每个接口的字段说明。
+
+---
+
 ## ✨ 核心功能
 
 ### 翻译功能

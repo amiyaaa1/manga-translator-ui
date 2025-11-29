@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manga Translator Web Console</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --card: #1f2937;
+      --accent: #38bdf8;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --border: #1f2937;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); }
+
+    header {
+      background: linear-gradient(90deg, #111827 0%, #0b1222 100%);
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid #1f2937;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #1f2937;
+      background: #0b1628;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .spacer { flex: 1; }
+
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #0b1222;
+      background: var(--accent);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .btn:active { transform: translateY(1px); }
+    .btn.secondary {
+      background: #1f2937;
+      color: var(--text);
+      border: 1px solid #243045;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 16px;
+      padding: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid #1f2937;
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      letter-spacing: 0.4px;
+      color: #cbd5e1;
+    }
+
+    .upload-area {
+      border: 1px dashed #2b3a52;
+      border-radius: 14px;
+      background: #0d1526;
+      padding: 14px;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .upload-area:hover { border-color: var(--accent); background: #0f1b30; }
+
+    .file-list {
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      background: var(--card);
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+    }
+
+    .file-name { flex: 1; font-size: 13px; color: #e5e7eb; }
+    .file-status { font-size: 12px; color: var(--muted); }
+
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+      background: #111827;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: #0b1222;
+      border-color: transparent;
+    }
+
+    .tabs-content { background: var(--panel); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .card h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: #d1d5db;
+      letter-spacing: 0.4px;
+    }
+
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .form-row label { font-size: 13px; color: #cbd5e1; }
+    .form-row small { color: var(--muted); font-size: 12px; }
+
+    input, select, textarea {
+      width: 100%;
+      background: #0f172a;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+      padding: 10px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: #0f172a;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+    }
+
+    .settings-actions { display: flex; gap: 10px; margin-top: 4px; }
+
+    .log-box {
+      background: #0d1526;
+      border-radius: 12px;
+      border: 1px solid #1f2937;
+      padding: 10px;
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 12px;
+      height: 320px;
+      overflow: auto;
+      white-space: pre-line;
+      color: #cbd5e1;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .thumb {
+      background: #0d1526;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .thumb img {
+      max-width: 100%;
+      border-radius: 8px;
+      display: block;
+      margin: 0 auto 8px;
+    }
+
+    .hint { color: var(--muted); font-size: 13px; }
+
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .pill { background: #0d1526; border-radius: 999px; padding: 6px 10px; border: 1px solid #1f2937; color: #cbd5e1; font-size: 12px; }
+
+    .admin-only { color: #fbbf24; font-weight: 600; font-size: 12px; margin-left: 6px; }
+    .preset-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .preset-row .btn { padding: 8px 12px; }
+    .preset-form { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; }
+    .error { color: #fca5a5; font-size: 13px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Manga Translator 云端控制台</div>
+    <div class="badge">与本地界面一致的全量设置</div>
+    <div class="spacer"></div>
+    <span id="admin-status" class="pill">访客模式</span>
+    <button id="admin-btn" class="btn secondary">管理员登录</button>
+    <button id="reset-btn" class="btn secondary">恢复默认设置</button>
+    <button id="translate-btn" class="btn">开始翻译</button>
+  </header>
+
+  <div class="layout">
+    <div class="panel">
+      <h3>文件列表</h3>
+      <div id="dropzone" class="upload-area">
+        拖拽图片到此处，或 <strong>点击选择文件</strong>
+        <input id="file-input" type="file" accept="image/*" multiple style="display:none;" />
+      </div>
+      <ul id="file-list" class="file-list"></ul>
+      <div class="toolbar" style="margin-top: 8px;">
+        <button id="add-btn" class="btn secondary">添加图片</button>
+        <button id="clear-btn" class="btn secondary">清空列表</button>
+        <span class="pill" id="queue-info">0 张待处理</span>
+      </div>
+
+      <div class="card" style="margin-top: 14px;">
+        <h4>翻译结果</h4>
+        <p class="hint">每个结果都会自动显示在下方，可点击下载。</p>
+        <div id="preview-grid" class="preview-grid"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="basic">基础设置</button>
+        <button class="tab-btn" data-tab="advanced">高级设置</button>
+        <button class="tab-btn" data-tab="options">选项</button>
+        <button class="tab-btn" data-tab="logs">日志</button>
+      </div>
+
+      <div class="tabs-content">
+        <div id="tab-basic" class="tab-panel active">
+          <div class="grid-two">
+            <div class="card">
+              <h4>翻译与 CLI</h4>
+              <div id="translator-settings"></div>
+            </div>
+            <div class="card">
+              <h4>输出与 CLI 控制</h4>
+              <div id="cli-settings"></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top: 12px;">
+            <h4>云端 API 预设 <span class="admin-only">管理员可编辑</span></h4>
+            <div id="preset-zone"></div>
+            <div id="preset-error" class="error" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div id="tab-advanced" class="tab-panel">
+          <div class="grid-two">
+            <div class="card">
+              <h4>检测与修复</h4>
+              <div id="detector-settings"></div>
+              <div id="inpainter-settings"></div>
+            </div>
+            <div class="card">
+              <h4>渲染 / 超分 / 上色</h4>
+              <div id="render-settings"></div>
+              <div id="upscale-settings"></div>
+              <div id="colorizer-settings"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-options" class="tab-panel">
+          <div class="grid-two">
+            <div class="card">
+              <h4>OCR 设置</h4>
+              <div id="ocr-settings"></div>
+            </div>
+            <div class="card">
+              <h4>全局与其他</h4>
+              <div id="global-settings"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-logs" class="tab-panel">
+          <div class="card">
+            <h4>执行日志</h4>
+            <div id="log-box" class="log-box"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DISPLAY_MAP = {
+      translator: '翻译器',
+      target_lang: '目标语言',
+      no_text_lang_skip: '跳过目标语文本',
+      skip_lang: '跳过语言',
+      gpt_config: 'GPT 配置文件',
+      high_quality_prompt_path: '高质量提示词',
+      translator_chain: '串联翻译器',
+      selective_translation: '选择性翻译',
+      attempts: '重试次数',
+      max_requests_per_minute: '每分钟请求上限',
+      enable_post_translation_check: '译后检查',
+      post_check_max_retry_attempts: '译后重试次数',
+      post_check_repetition_threshold: '重复阈值',
+      post_check_target_lang_threshold: '目标语占比阈值',
+      force_strict_layout: '严格布局',
+      verbose: '详细日志',
+      ignore_errors: '忽略错误',
+      use_gpu: '启用 GPU',
+      use_gpu_limited: '限制 GPU',
+      context_size: '上下文大小',
+      format: '导出格式',
+      overwrite: '覆盖输出',
+      skip_no_text: '跳过无文字',
+      save_text: '保存文字',
+      load_text: '加载文字',
+      template: '导出模版',
+      save_quality: '保存质量',
+      batch_size: '批大小',
+      batch_concurrent: '并行批处理',
+      generate_and_export: '生成并导出',
+      colorize_only: '仅上色',
+      upscale_only: '仅超分',
+      detector: '检测器',
+      detection_size: '检测尺寸',
+      text_threshold: '文字阈值',
+      det_rotate: '启用旋转',
+      det_auto_rotate: '自动旋转',
+      det_invert: '反色检测',
+      det_gamma_correct: '伽马矫正',
+      use_yolo_obb: 'YOLO OBB 辅助',
+      yolo_obb_conf: 'YOLO 置信度',
+      yolo_obb_iou: 'YOLO IOU',
+      yolo_obb_overlap_threshold: 'YOLO 重叠阈值',
+      box_threshold: '文本框阈值',
+      unclip_ratio: '膨胀比例',
+      min_box_area_ratio: '最小区域比例',
+      force_simple_sort: '简易排序',
+      inpainter: '修复器',
+      inpainting_size: '修复尺寸',
+      inpainting_precision: '修复精度',
+      inpainting_split_ratio: '分块比例',
+      renderer: '渲染器',
+      alignment: '对齐方式',
+      disable_font_border: '关闭描边',
+      disable_auto_wrap: '关闭自动换行',
+      font_size_offset: '字号偏移',
+      font_size_minimum: '最小字号',
+      max_font_size: '最大字号',
+      font_scale_ratio: '字号缩放',
+      center_text_in_bubble: '气泡居中',
+      optimize_line_breaks: '优化换行',
+      check_br_and_retry: '检查换行并重试',
+      strict_smart_scaling: '严格智能缩放',
+      font_size: '固定字号',
+      line_spacing: '行间距',
+      font_path: '字体路径',
+      gimp_font: '字体名',
+      auto_rotate_symbols: '符号自动旋转',
+      rtl: 'RTL',
+      layout_mode: '布局模式',
+      font_color: '字体颜色',
+      stroke_width: '描边宽度',
+      upscaler: '超分模型',
+      upscale_ratio: '超分倍数',
+      realcugan_model: 'RealCUGAN 模型',
+      tile_size: '分块大小',
+      revert_upscaling: '还原原尺寸',
+      colorization_size: '上色尺寸',
+      denoise_sigma: '降噪强度',
+      colorizer: '上色器',
+      use_mocr_merge: '合并框',
+      ocr: 'OCR 模型',
+      use_hybrid_ocr: '混合 OCR',
+      secondary_ocr: '二级 OCR',
+      min_text_length: '最小长度',
+      ignore_bubble: '忽略气泡阈值',
+      prob: '置信度阈值',
+      merge_gamma: '合并 Gamma',
+      merge_sigma: '合并 Sigma',
+      merge_edge_ratio_threshold: '边缘比阈值',
+      filter_text: '文本过滤正则',
+      kernel_size: '卷积核大小',
+      mask_dilation_offset: '遮罩膨胀',
+      last_output_path: '输出目录',
+      theme: '主题',
+      favorite_folders: '收藏目录'
+    };
+
+    const ENUM_OPTIONS = {
+      translator: ['youdao','baidu','deepl','papago','caiyun','openai','none','original','sakura','groq','gemini','openai_hq','gemini_hq','offline','nllb','nllb_big','sugoi','jparacrawl','jparacrawl_big','m2m100','m2m100_big','mbart50','qwen2','qwen2_big'],
+      target_lang: ['CHS','CHT','JPN','ENG','KOR','ESP','FRA','DEU','ITA','RUS','POL','PTB','ROM','TRK','UKR','VIN','ARA','CNR','SRP','HRV','THA','IND','FIL','NLD','CSY','HUN'],
+      detector: ['default','dbconvnext','ctd','craft','none'],
+      inpainter: ['default','lama_large','lama_mpe','sd','none','original'],
+      inpainting_precision: ['fp32','fp16','bf16'],
+      renderer: ['default','manga2eng','manga2eng_pillow','none'],
+      alignment: ['auto','left','center','right'],
+      direction: ['auto','horizontal','vertical'],
+      layout_mode: ['smart_scaling','legacy','simple'],
+      upscaler: ['waifu2x','esrgan','4xultrasharp','realcugan'],
+      colorizer: ['none','mc2'],
+      ocr: ['32px','48px','48px_ctc','mocr','paddleocr','paddleocr_korean','paddleocr_latin'],
+      secondary_ocr: ['32px','48px','48px_ctc','mocr','paddleocr','paddleocr_korean','paddleocr_latin'],
+      format: ['不指定','json','text','csv'],
+      theme: ['light','dark']
+    };
+
+    const SECTION_FIELDS = {
+      translator: [
+        'translator','target_lang','skip_lang','no_text_lang_skip','gpt_config','high_quality_prompt_path','translator_chain','selective_translation','attempts','max_requests_per_minute','enable_post_translation_check','post_check_max_retry_attempts','post_check_repetition_threshold','post_check_target_lang_threshold'
+      ],
+      cli: [
+        'verbose','attempts','ignore_errors','use_gpu','use_gpu_limited','context_size','format','overwrite','skip_no_text','save_text','load_text','template','save_quality','batch_size','batch_concurrent','generate_and_export','colorize_only','upscale_only','last_output_path'
+      ],
+      detector: [
+        'detector','detection_size','text_threshold','det_rotate','det_auto_rotate','det_invert','det_gamma_correct','use_yolo_obb','yolo_obb_conf','yolo_obb_iou','yolo_obb_overlap_threshold','box_threshold','unclip_ratio','min_box_area_ratio'
+      ],
+      inpainter: [
+        'inpainter','inpainting_size','inpainting_precision','inpainting_split_ratio'
+      ],
+      render: [
+        'renderer','force_strict_layout','alignment','direction','disable_font_border','disable_auto_wrap','font_size_offset','font_size_minimum','max_font_size','font_scale_ratio','center_text_in_bubble','optimize_line_breaks','check_br_and_retry','strict_smart_scaling','font_size','line_spacing','font_path','gimp_font','no_hyphenation','font_color','auto_rotate_symbols','rtl','layout_mode','stroke_width'
+      ],
+      upscale: [
+        'upscaler','upscale_ratio','realcugan_model','tile_size','revert_upscaling'
+      ],
+      colorizer: [
+        'colorizer','colorization_size','denoise_sigma'
+      ],
+      ocr: [
+        'use_mocr_merge','ocr','use_hybrid_ocr','secondary_ocr','min_text_length','ignore_bubble','prob','merge_gamma','merge_sigma','merge_edge_ratio_threshold'
+      ],
+      global: [
+        'filter_text','kernel_size','mask_dilation_offset','force_simple_sort'
+      ],
+    };
+
+    let configData = {};
+    let defaultConfig = {};
+    let files = [];
+    let results = [];
+    let adminMode = false;
+    const PRESET_STORE = 'mt_cloud_api_presets_v2';
+    const PRESET_SELECT_STORE = 'mt_cloud_api_selected_v2';
+
+    const logBox = document.getElementById('log-box');
+
+    function log(msg) {
+      const time = new Date().toLocaleTimeString();
+      logBox.textContent += `[${time}] ${msg}\n`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function clone(obj) {
+      return JSON.parse(JSON.stringify(obj || {}));
+    }
+
+    function getDisplayName(key) {
+      return DISPLAY_MAP[key] || key;
+    }
+
+    function getOptions(key) {
+      return ENUM_OPTIONS[key] || null;
+    }
+
+    function isNumber(val) {
+      return typeof val === 'number' && !Number.isNaN(val);
+    }
+
+    function renderInput(rowEl, sectionKey, key, value) {
+      const fullKey = sectionKey ? `${sectionKey}.${key}` : key;
+      const options = getOptions(key);
+
+      if (typeof value === 'boolean') {
+        const wrapper = document.createElement('label');
+        wrapper.className = 'checkbox-row';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = value;
+        input.addEventListener('change', () => updateConfigValue(fullKey, input.checked));
+        const span = document.createElement('span');
+        span.textContent = getDisplayName(key);
+        wrapper.appendChild(input);
+        wrapper.appendChild(span);
+        rowEl.appendChild(wrapper);
+        return;
+      }
+
+      if (options) {
+        const select = document.createElement('select');
+        options.forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt;
+          option.textContent = opt;
+          if (value === opt) option.selected = true;
+          select.appendChild(option);
+        });
+        select.addEventListener('change', () => updateConfigValue(fullKey, select.value));
+        rowEl.appendChild(select);
+        return;
+      }
+
+      const input = document.createElement('input');
+      if (isNumber(value)) {
+        input.type = 'number';
+        input.step = value % 1 === 0 ? '1' : '0.01';
+      } else {
+        input.type = 'text';
+      }
+      input.value = value ?? '';
+      input.placeholder = '留空为默认';
+      input.addEventListener('input', () => {
+        let finalVal = input.value;
+        if (isNumber(value)) {
+          const n = Number(finalVal);
+          finalVal = Number.isNaN(n) ? value : n;
+        }
+        updateConfigValue(fullKey, finalVal === '' ? null : finalVal);
+      });
+      rowEl.appendChild(input);
+    }
+
+    function updateConfigValue(path, value) {
+      const segments = path.split('.');
+      let cursor = configData;
+      for (let i = 0; i < segments.length - 1; i++) {
+        const key = segments[i];
+        cursor[key] = cursor[key] ?? {};
+        cursor = cursor[key];
+      }
+      cursor[segments[segments.length - 1]] = value;
+    }
+
+    function renderSection(containerId, sectionKey, sectionData) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      const defaultSection = sectionKey ? (defaultConfig[sectionKey] || {}) : defaultConfig;
+      const fields = SECTION_FIELDS[sectionKey || 'global'];
+      const entries = (fields && fields.length
+        ? fields.map(key => [key, (sectionData && sectionData[key] !== undefined ? sectionData[key] : defaultSection ? defaultSection[key] : null)])
+        : Object.entries(sectionData || {}));
+      entries.forEach(([key, value]) => {
+        const row = document.createElement('div');
+        row.className = 'form-row';
+        const label = document.createElement('label');
+        label.textContent = getDisplayName(key);
+        row.appendChild(label);
+        renderInput(row, sectionKey, key, value);
+        container.appendChild(row);
+      });
+    }
+
+    function renderAll() {
+      renderSection('translator-settings', 'translator', configData.translator || {});
+      renderSection('cli-settings', 'cli', configData.cli || {});
+      renderSection('detector-settings', 'detector', configData.detector || {});
+      renderSection('inpainter-settings', 'inpainter', configData.inpainter || {});
+      renderSection('render-settings', 'render', configData.render || {});
+      renderSection('upscale-settings', 'upscale', configData.upscale || {});
+      renderSection('colorizer-settings', 'colorizer', configData.colorizer || {});
+      renderSection('ocr-settings', 'ocr', configData.ocr || {});
+
+      const globals = {};
+      SECTION_FIELDS.global.forEach(key => {
+        globals[key] = configData[key] ?? defaultConfig[key] ?? null;
+      });
+      renderSection('global-settings', 'global', globals);
+      renderPresetZone();
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/web/default-config');
+        const data = await res.json();
+        defaultConfig = clone(data);
+        configData = clone(data);
+        renderAll();
+        log('默认配置已载入');
+      } catch (e) {
+        log('载入配置失败，请检查服务是否启动');
+      }
+    }
+
+    function resetConfig() {
+      configData = clone(defaultConfig);
+      renderAll();
+      log('已恢复默认配置');
+    }
+
+    function renderFileList() {
+      const list = document.getElementById('file-list');
+      list.innerHTML = '';
+      files.forEach((item, idx) => {
+        const li = document.createElement('li');
+        li.className = 'file-item';
+        const name = document.createElement('div');
+        name.className = 'file-name';
+        name.textContent = item.file.name;
+        const status = document.createElement('div');
+        status.className = 'file-status';
+        status.textContent = item.status || '待处理';
+        const del = document.createElement('button');
+        del.className = 'btn secondary';
+        del.textContent = '移除';
+        del.addEventListener('click', () => {
+          files.splice(idx,1);
+          renderFileList();
+          updateQueueInfo();
+        });
+        li.appendChild(name);
+        li.appendChild(status);
+        li.appendChild(del);
+        list.appendChild(li);
+      });
+      updateQueueInfo();
+    }
+
+    function updateQueueInfo() {
+      const pill = document.getElementById('queue-info');
+      pill.textContent = `${files.length} 张待处理`;
+    }
+
+    function addFiles(fileList) {
+      for (const file of fileList) {
+        if (!file.type.startsWith('image/')) continue;
+        files.push({ file, status: '待处理' });
+      }
+      renderFileList();
+      log(`已添加 ${fileList.length} 个文件`);
+    }
+
+    function renderTabs() {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tab = btn.dataset.tab;
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+          document.getElementById(`tab-${tab}`).classList.add('active');
+        });
+      });
+    }
+
+    function renderPreview() {
+      const grid = document.getElementById('preview-grid');
+      grid.innerHTML = '';
+      results.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'thumb';
+        const img = document.createElement('img');
+        img.src = item.url;
+        img.alt = item.name;
+        const caption = document.createElement('div');
+        caption.textContent = item.name;
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.download = `${item.name}-translated.png`;
+        link.textContent = '下载结果';
+        card.appendChild(img);
+        card.appendChild(caption);
+        card.appendChild(link);
+        grid.appendChild(card);
+      });
+    }
+
+    function loadPresets() {
+      try {
+        const raw = localStorage.getItem(PRESET_STORE);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function savePresets(list) {
+      localStorage.setItem(PRESET_STORE, JSON.stringify(list));
+    }
+
+    function currentPresetName() {
+      return localStorage.getItem(PRESET_SELECT_STORE) || '';
+    }
+
+    function setCurrentPreset(name) {
+      localStorage.setItem(PRESET_SELECT_STORE, name || '');
+    }
+
+    function getSelectedPreset() {
+      const name = currentPresetName();
+      return loadPresets().find(p => p.name === name) || null;
+    }
+
+    function renderPresetZone() {
+      const container = document.getElementById('preset-zone');
+      const presets = loadPresets();
+      const selected = currentPresetName();
+      container.innerHTML = '';
+
+      const row = document.createElement('div');
+      row.className = 'preset-row';
+
+      const select = document.createElement('select');
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = '不使用预设';
+      select.appendChild(emptyOption);
+      presets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        if (p.name === selected) opt.selected = true;
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', () => {
+        setCurrentPreset(select.value);
+        renderPresetZone();
+      });
+      row.appendChild(select);
+
+      const info = document.createElement('span');
+      info.className = 'hint';
+      info.textContent = adminMode ? '已登录管理员，可编辑云端 API 预设' : '访客只能选择预设名称，管理员可编辑详情';
+      row.appendChild(info);
+      container.appendChild(row);
+
+      if (adminMode) {
+        const form = document.createElement('div');
+        form.className = 'preset-form';
+
+        const fields = [
+          { key: 'name', label: '预设名称', type: 'text' },
+          { key: 'api_base', label: 'Base URL', type: 'text' },
+          { key: 'api_model', label: '模型名称', type: 'text' },
+          { key: 'api_key', label: 'API Key', type: 'password' },
+        ];
+
+        const editing = presets.find(p => p.name === selected) || { name: '', api_base: '', api_model: '', api_key: '' };
+        const inputs = {};
+
+        fields.forEach(f => {
+          const wrap = document.createElement('div');
+          wrap.className = 'form-row';
+          const label = document.createElement('label');
+          label.textContent = f.label;
+          const input = document.createElement('input');
+          input.type = f.type;
+          input.value = editing[f.key] || '';
+          inputs[f.key] = input;
+          wrap.appendChild(label);
+          wrap.appendChild(input);
+          form.appendChild(wrap);
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'preset-row';
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn secondary';
+        saveBtn.textContent = '保存 / 更新预设';
+        saveBtn.addEventListener('click', () => {
+          const name = inputs.name.value.trim();
+          if (!name) {
+            showPresetError('请填写预设名称');
+            return;
+          }
+          hidePresetError();
+          const updated = presets.filter(p => p.name !== name);
+          updated.push({
+            name,
+            api_base: inputs.api_base.value.trim(),
+            api_model: inputs.api_model.value.trim(),
+            api_key: inputs.api_key.value.trim(),
+          });
+          savePresets(updated);
+          setCurrentPreset(name);
+          renderPresetZone();
+          log(`已保存预设 ${name}`);
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn secondary';
+        deleteBtn.textContent = '删除预设';
+        deleteBtn.addEventListener('click', () => {
+          if (!selected) return;
+          const filtered = presets.filter(p => p.name !== selected);
+          savePresets(filtered);
+          setCurrentPreset('');
+          renderPresetZone();
+          log(`已删除预设 ${selected}`);
+        });
+
+        actions.appendChild(saveBtn);
+        actions.appendChild(deleteBtn);
+        form.appendChild(actions);
+        container.appendChild(form);
+      }
+    }
+
+    function showPresetError(msg) {
+      const el = document.getElementById('preset-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function hidePresetError() {
+      const el = document.getElementById('preset-error');
+      el.style.display = 'none';
+    }
+
+    async function translateQueue() {
+      if (!files.length) {
+        log('请先添加图片');
+        return;
+      }
+      document.getElementById('translate-btn').disabled = true;
+      for (const item of files) {
+        item.status = '翻译中…';
+        renderFileList();
+        try {
+          const blobUrl = await translateSingle(item.file);
+          results.push({ name: item.file.name, url: blobUrl });
+          item.status = '完成';
+          renderPreview();
+          log(`${item.file.name} 翻译完成`);
+        } catch (e) {
+          item.status = '失败';
+          log(`${item.file.name} 翻译失败: ${e.message || e}`);
+        }
+        renderFileList();
+      }
+      document.getElementById('translate-btn').disabled = false;
+    }
+
+    async function translateSingle(file) {
+      const preset = getSelectedPreset();
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('config', JSON.stringify(configData));
+      if (preset) {
+        if (preset.api_base) fd.append('api_base', preset.api_base);
+        if (preset.api_key) fd.append('api_key', preset.api_key);
+        if (preset.api_model) fd.append('api_model', preset.api_model);
+      }
+      const res = await fetch('/translate/with-form/image', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || '翻译失败');
+      }
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    }
+
+    async function promptAdminLogin() {
+      const key = prompt('请输入管理员密钥 (WEB_CONSOLE_ADMIN_KEY)');
+      if (!key) return;
+      try {
+        const res = await fetch('/web/admin-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || '认证失败');
+        adminMode = true;
+        sessionStorage.setItem('mt_admin', '1');
+        updateAdminStatus();
+        renderPresetZone();
+        log('管理员登录成功');
+      } catch (e) {
+        log(`管理员登录失败：${e.message}`);
+        alert('管理员密钥错误或未配置');
+      }
+    }
+
+    function logoutAdmin() {
+      adminMode = false;
+      sessionStorage.removeItem('mt_admin');
+      updateAdminStatus();
+      renderPresetZone();
+    }
+
+    function updateAdminStatus() {
+      const badge = document.getElementById('admin-status');
+      const btn = document.getElementById('admin-btn');
+      if (adminMode) {
+        badge.textContent = '管理员';
+        badge.style.background = '#12263f';
+        btn.textContent = '退出登录';
+      } else {
+        badge.textContent = '访客模式';
+        badge.style.background = '#0d1526';
+        btn.textContent = '管理员登录';
+      }
+    }
+
+    function restoreAdminSession() {
+      adminMode = sessionStorage.getItem('mt_admin') === '1';
+      updateAdminStatus();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderTabs();
+      restoreAdminSession();
+      loadConfig();
+
+      document.getElementById('dropzone').addEventListener('click', () => document.getElementById('file-input').click());
+      document.getElementById('file-input').addEventListener('change', (e) => addFiles(e.target.files));
+      document.getElementById('add-btn').addEventListener('click', () => document.getElementById('file-input').click());
+      document.getElementById('clear-btn').addEventListener('click', () => { files = []; renderFileList(); results = []; renderPreview(); });
+      document.getElementById('reset-btn').addEventListener('click', resetConfig);
+      document.getElementById('translate-btn').addEventListener('click', translateQueue);
+      document.getElementById('admin-btn').addEventListener('click', () => {
+        if (adminMode) {
+          logoutAdmin();
+        } else {
+          promptAdminLogin();
+        }
+      });
+
+      const dropzone = document.getElementById('dropzone');
+      ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.style.borderColor = '#38bdf8'; }));
+      ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.style.borderColor = '#2b3a52'; }));
+      dropzone.addEventListener('drop', (e) => { e.preventDefault(); addFiles(e.dataTransfer.files); });
+
+      renderPresetZone();
+      renderFileList();
+      renderPreview();
+    });
+  </script>
+</body>
+</html>

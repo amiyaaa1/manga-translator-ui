@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 
 def create_parser():
@@ -13,10 +14,12 @@ def create_parser():
     
     # ===== Web 模式 =====
     web_parser = subparsers.add_parser('web', help='Web API 服务器模式')
-    web_parser.add_argument('--host', default='127.0.0.1',
-                           help='服务器主机（默认：127.0.0.1）')
-    web_parser.add_argument('--port', default=8000, type=int,
-                           help='服务器端口（默认：8000）')
+    web_default_host = os.getenv('HOST', '0.0.0.0')
+    web_default_port = int(os.getenv('PORT', '8000'))
+    web_parser.add_argument('--host', default=web_default_host,
+                           help=f'服务器主机（默认：{web_default_host}）')
+    web_parser.add_argument('--port', default=web_default_port, type=int,
+                           help=f'服务器端口（默认：{web_default_port}）')
     web_parser.add_argument('--use-gpu', action='store_true',
                            help='使用 GPU')
     web_parser.add_argument('--models-ttl', default=0, type=int,
