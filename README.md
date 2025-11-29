@@ -98,17 +98,33 @@
    - 解压压缩包到任意目录
    - 双击 `app.exe`
 
-#### 方式三：手动部署（开发者）
+#### 方式三：手动部署（开发者，跨平台）
 
-1. **安装 Python 3.12**：[下载](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)
+1. **安装 Python 3.12**：
+   - Windows：[下载](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe)
+   - Linux/macOS：使用发行版包管理器（如 `sudo apt install python3.12 python3.12-venv`）
 2. **克隆仓库**：`git clone https://github.com/hgmzhn/manga-translator-ui.git`
-3. **安装依赖**：
-   - **NVIDIA GPU**：`py -3.12 -m pip install -r requirements_gpu.txt`
-   - **AMD GPU**：`py -3.12 -m pip install -r requirements_amd.txt` 并参考文件注释安装 AMD PyTorch
-   - **CPU 版本**：`py -3.12 -m pip install -r requirements_cpu.txt`
-4. **运行程序**：`py -3.12 -m desktop_qt_ui.main`
+3. **安装依赖**（以下命令均在项目根目录运行）：
+   - **快速脚本（Linux/macOS）**：`./scripts/setup_linux.sh`（默认 CPU 版本，可通过 `TORCH_VARIANT=gpu`/`amd` 切换）
+   - **手动安装**：
+     - **NVIDIA GPU**：`python -m pip install -r requirements_gpu.txt`
+     - **AMD GPU**：`python -m pip install -r requirements_amd.txt` 并参考文件注释安装 AMD PyTorch
+     - **CPU 版本**：`python -m pip install -r requirements_cpu.txt`
+4. **运行程序**：
+   - GUI：`python -m desktop_qt_ui.main`
+   - 命令行：`python -m manga_translator -i your_image.jpg`
 
 **详细安装指南** → [doc/INSTALLATION.md](doc/INSTALLATION.md)
+
+#### 方式四：在 Zeabur 上一键部署（CPU Web API）
+
+如果只需要 Web API，可直接使用仓库自带的 `Dockerfile` 部署到 Zeabur：
+
+1. 将仓库连到 Zeabur，选择 **Dockerfile** 部署，端口使用 `8000`。
+2. 无需自定义启动命令，容器会自动执行 `python -m manga_translator web --host 0.0.0.0 --port 8000`。
+3. 在 Zeabur 控制台添加翻译器所需的 API Key 环境变量（如 `OPENAI_API_KEY`）。
+
+详细图文步骤见：[Zeabur 部署教程](doc/ZEABUR_DEPLOYMENT.md)
 
 ---
 
