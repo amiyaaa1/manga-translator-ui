@@ -154,6 +154,51 @@ python -m manga_translator --help
 
 ---
 
+## ☁️ Zeabur 云端部署（Web API）
+
+> 适合想把 Web API 部署到云端、方便与第三方系统对接的同学。
+
+### 改了什么？
+
+- Web 模式默认读取 `HOST` / `PORT` 环境变量，并在缺省时回退到 `0.0.0.0:8000`，以适配 Zeabur 等平台的端口分配。
+- Docker 镜像的默认启动命令改为 `python -m manga_translator web --host 0.0.0.0 --port ${PORT:-8000}`，无需手动传参即可在 Zeabur 运行。
+
+### 部署前准备
+
+1. 一个 Zeabur 账号（新用户按向导完成注册）。
+2. 本仓库的代码托管在你可访问的 GitHub 账号（直接使用本仓库也可以）。
+3. 默认使用 CPU 运行，Zeabur 免费方案无需额外硬件配置。
+
+### Zeabur 新手向导
+
+1. **创建项目**：登录 Zeabur 后点击「新建项目」，输入任意名称，确认创建。
+2. **添加服务**：在项目内选择「创建服务」 →「从代码仓库」，绑定你的 GitHub 账号并选择本仓库。Zeabur 会自动检测到根目录的 `Dockerfile`。
+3. **构建设置**：保持默认构建命令（Zeabur 会直接用 Dockerfile 构建镜像），无需额外修改。
+4. **环境变量**：
+   - Zeabur 会自动注入 `PORT`，**不要手动硬编码**。
+   - 如需显式设置，可在「环境变量」中添加 `HOST=0.0.0.0`，确保服务监听所有网卡。
+5. **部署启动**：点击「部署」，等待日志中出现 `Application startup complete.` 表示启动成功。
+6. **验证访问**：
+   - 打开 Zeabur 提供的域名，访问 `https://<你的域名>/docs` 查看 FastAPI 自带的交互式文档。
+   - 使用 `curl` 进行健康检查：
+     ```bash
+     curl -I https://<你的域名>/docs
+     ```
+7. **更新版本**：仓库更新后，回到 Zeabur 服务页面点击「重新部署」即可拉取最新代码。
+
+### 调用示例
+
+```bash
+# 替换成 Zeabur 自动分配的域名
+curl -X POST "https://<你的域名>/translate" \
+     -H "Content-Type: application/json" \
+     -d '{"image_url": "https://example.com/manga.jpg"}'
+```
+
+> 提示：如需关闭自动缓存或调整并发，可在请求体中传入对应参数，具体可在 `/docs` 页面查看每个接口的字段说明。
+
+---
+
 ## ✨ 核心功能
 
 ### 翻译功能
