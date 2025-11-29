@@ -965,15 +965,17 @@
       if (!res.ok) {
         let detail = '保存失败';
         try {
-          const data = await res.json();
-          detail = data.detail || detail;
-        } catch {
-          try {
-            const text = await res.text();
-            if (text) detail = `${detail}: ${text}`;
-          } catch (e) {
-            detail = `${detail}: ${e.message || e}`;
+          const raw = await res.text();
+          if (raw) {
+            try {
+              const data = JSON.parse(raw);
+              detail = data.detail || data.message || detail;
+            } catch {
+              detail = `${detail}: ${raw}`;
+            }
           }
+        } catch (e) {
+          detail = `${detail}: ${e.message || e}`;
         }
         throw new Error(detail);
       }
