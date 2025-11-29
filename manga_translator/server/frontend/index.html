@@ -627,8 +627,12 @@
     let adminMode = false;
     let guestFile = null;
     let announcementText = '';
+    let adminKey = '';
+    let presetCache = [];
+    let presetsLoaded = false;
     const PRESET_STORE = 'mt_cloud_api_presets_v2';
     const PRESET_SELECT_STORE = 'mt_cloud_api_selected_v2';
+    const ADMIN_KEY_STORE = 'mt_admin_key';
 
     const logBox = document.getElementById('log-box');
 
@@ -905,7 +909,7 @@
       });
     }
 
-    function loadPresets() {
+    function readLocalPresets() {
       try {
         const raw = localStorage.getItem(PRESET_STORE);
         const parsed = raw ? JSON.parse(raw) : [];
@@ -915,8 +919,60 @@
       }
     }
 
-    function savePresets(list) {
+    function writeLocalPresets(list) {
       localStorage.setItem(PRESET_STORE, JSON.stringify(list));
+    }
+
+    function loadPresets() {
+      if (!presetsLoaded) {
+        presetCache = readLocalPresets();
+        presetsLoaded = true;
+      }
+      return presetCache;
+    }
+
+    function setCachedPresets(list) {
+      presetCache = Array.isArray(list) ? list : [];
+      presetsLoaded = true;
+      writeLocalPresets(presetCache);
+    }
+
+    async function refreshPresetsFromServer() {
+      try {
+        const res = await fetch('/web/api-presets');
+        if (!res.ok) throw new Error('拉取失败');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setCachedPresets(data);
+          return data;
+        }
+      } catch (e) {
+        log(`云端预设拉取失败，继续使用本地数据：${e.message || e}`);
+      }
+      return loadPresets();
+    }
+
+    async function persistPresets(list) {
+      if (!adminKey) throw new Error('请先登录管理员');
+      const res = await fetch('/web/api-presets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': adminKey,
+        },
+        body: JSON.stringify({ presets: list }),
+      });
+      if (!res.ok) {
+        let detail = '保存失败';
+        try {
+          const data = await res.json();
+          detail = data.detail || detail;
+        } catch (e) {
+          detail = `${detail}: ${e.message || e}`;
+        }
+        throw new Error(detail);
+      }
+      setCachedPresets(list);
     }
 
     function currentPresetName() {
@@ -934,7 +990,7 @@
 
     function renderPresetZone() {
       const container = document.getElementById('preset-zone');
-      const presets = loadPresets();
+      let presets = loadPresets();
       const selected = currentPresetName();
       container.innerHTML = '';
 
@@ -998,7 +1054,7 @@
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn secondary';
         saveBtn.textContent = '保存 / 更新预设';
-        saveBtn.addEventListener('click', () => {
+        saveBtn.addEventListener('click', async () => {
           const name = inputs.name.value.trim();
           if (!name) {
             showPresetError('请填写预设名称');
@@ -1012,22 +1068,32 @@
             api_model: inputs.api_model.value.trim(),
             api_key: inputs.api_key.value.trim(),
           });
-          savePresets(updated);
-          setCurrentPreset(name);
-          renderPresetZone();
-          log(`已保存预设 ${name}`);
+          try {
+            await persistPresets(updated);
+            presets = loadPresets();
+            setCurrentPreset(name);
+            renderPresetZone();
+            log(`已保存预设 ${name}`);
+          } catch (e) {
+            showPresetError(e.message || '保存失败');
+          }
         });
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn secondary';
         deleteBtn.textContent = '删除预设';
-        deleteBtn.addEventListener('click', () => {
+        deleteBtn.addEventListener('click', async () => {
           if (!selected) return;
           const filtered = presets.filter(p => p.name !== selected);
-          savePresets(filtered);
-          setCurrentPreset('');
-          renderPresetZone();
-          log(`已删除预设 ${selected}`);
+          try {
+            await persistPresets(filtered);
+            presets = loadPresets();
+            setCurrentPreset('');
+            renderPresetZone();
+            log(`已删除预设 ${selected}`);
+          } catch (e) {
+            showPresetError(e.message || '删除失败');
+          }
         });
 
         actions.appendChild(saveBtn);
@@ -1205,8 +1271,11 @@
         });
         if (!res.ok) throw new Error((await res.json()).detail || '认证失败');
         adminMode = true;
+        adminKey = key;
         sessionStorage.setItem('mt_admin', '1');
+        sessionStorage.setItem(ADMIN_KEY_STORE, key);
         updateAdminStatus();
+        await refreshPresetsFromServer();
         renderPresetZone();
         syncAnnouncementEditor();
         enterAdminMode();
@@ -1222,7 +1291,9 @@
 
     function logoutAdmin() {
       adminMode = false;
+      adminKey = '';
       sessionStorage.removeItem('mt_admin');
+      sessionStorage.removeItem(ADMIN_KEY_STORE);
       updateAdminStatus();
       renderPresetZone();
       syncAnnouncementEditor();
@@ -1245,6 +1316,7 @@
 
     function restoreAdminSession() {
       adminMode = sessionStorage.getItem('mt_admin') === '1';
+      adminKey = sessionStorage.getItem(ADMIN_KEY_STORE) || '';
       updateAdminStatus();
     }
 
@@ -1253,6 +1325,8 @@
       updateAnnouncementDisplays();
       renderTabs();
       restoreAdminSession();
+      loadPresets();
+      refreshPresetsFromServer().then(() => { renderPresetZone(); renderGuestOptions(); });
       loadConfig();
 
       document.getElementById('landing-admin-btn').addEventListener('click', async () => {
