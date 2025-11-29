@@ -32,20 +32,40 @@ class ExecutorInstance(BaseModel):
                                {"images": images, "config": config, "batch_size": batch_size}, config, sender)
 
 class Executors:
-    def __init__(self):
+    def __init__(self, max_concurrency: int = 5):
         self.list: List[ExecutorInstance] = []
         self.lock: Lock = Lock()
         self.event = Event()
+        self.max_concurrency = max_concurrency
+
+    def set_limit(self, limit: int):
+        self.max_concurrency = max(1, limit)
+        self.event.set()
+        self.event.clear()
 
     def register(self, instance: ExecutorInstance):
         self.list.append(instance)
+        self.event.set()
+        self.event.clear()
 
-    def free_executors(self) -> int:
-        return len([item for item in self.list if not item.busy])
+    def available_capacity(self) -> int:
+        allowed = min(self.max_concurrency, len(self.list))
+        busy = len([item for item in self.list if item.busy])
+        return max(0, allowed - busy)
 
     async def _find_instance(self):
         while True:
-            instance = next((x for x in self.list if x.busy == False), None)
+            allowed = min(self.max_concurrency, len(self.list))
+            if allowed == 0:
+                await self.event.wait()
+                continue
+
+            busy = len([item for item in self.list if item.busy])
+            if busy >= allowed:
+                await self.event.wait()
+                continue
+
+            instance = next((x for x in self.list if not x.busy), None)
             if instance is not None:
                 return instance
             #todo: cricial error: warn should never happen
@@ -63,5 +83,6 @@ class Executors:
         self.event.set()
         self.event.clear()
         await task_queue.update_event()
+
 
 executor_instances: Executors = Executors()

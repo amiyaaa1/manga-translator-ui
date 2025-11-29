@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 
 from manga_translator import Config, MangaTranslator
+from manga_translator.server.concurrency import translation_slot
 from manga_translator.server.myqueue import task_queue, wait_in_queue, QueueElement, BatchQueueElement
 from manga_translator.server.streaming import notify, stream
 from manga_translator.utils import BASE_PATH
@@ -160,10 +161,11 @@ async def get_ctx(req: Request, config: Config, image: str|bytes, workflow: str 
         translator_params['attempts'] = retry_attempts
     
     # 创建翻译器
-    translator = MangaTranslator(params=translator_params)
-    
-    # 翻译
-    ctx = await translator.translate(image, config)
+    async with translation_slot():
+        translator = MangaTranslator(params=translator_params)
+
+        # 翻译
+        ctx = await translator.translate(image, config)
     
 
     
@@ -230,49 +232,50 @@ async def while_streaming(req: Request, transform, config: Config, image: bytes 
             print(f"[STREAMING] server_config={server_config}")
             print(f"[STREAMING] translator_params: use_gpu={translator_params.get('use_gpu')}, workflow={workflow}")
             
-            # 创建翻译器
-            print("[STREAMING] 创建翻译器实例")
-            yield pack_message(1, json.dumps({"stage": "translator_init", "message": "初始化翻译器..."}, ensure_ascii=False).encode('utf-8'))
-            translator = MangaTranslator(params=translator_params)
-            
-            # 发送进度：翻译中
-            print("[STREAMING] 开始翻译")
-            yield pack_message(1, json.dumps({"stage": "translating", "message": "正在翻译..."}, ensure_ascii=False).encode('utf-8'))
-            
-            # 翻译
-            try:
-                print("[STREAMING] 调用 translator.translate()")
-                ctx = await translator.translate(pil_image, config)
-                print(f"[STREAMING] 翻译完成，ctx.result={ctx.result is not None if hasattr(ctx, 'result') else 'no result attr'}")
-                
-                # 添加 workflow_result（与 get_ctx 保持一致）
-                result = {
-                    'success': ctx.success if hasattr(ctx, 'success') else (ctx.result is not None),
-                    'workflow': workflow
-                }
-                
-                if ctx.result:
-                    result['has_image'] = True
-                
-                if hasattr(ctx, 'text_regions') and ctx.text_regions:
-                    result['text_regions'] = []
-                    for region in ctx.text_regions:
-                        region_data = {
-                            'text': region.text if hasattr(region, 'text') else '',
-                            'translation': region.translation if hasattr(region, 'translation') else '',
-                        }
-                        result['text_regions'].append(region_data)
-                
-                ctx._workflow_result = result
-                
-                yield pack_message(1, json.dumps({"stage": "translate_done", "message": "翻译完成，处理结果..."}, ensure_ascii=False).encode('utf-8'))
-            except Exception as translate_error:
-                error_msg = f"翻译过程失败: {str(translate_error)}"
-                print(f"[STREAMING ERROR] {error_msg}")
-                import traceback
-                traceback.print_exc()
-                yield pack_message(2, json.dumps({"error": error_msg, "stage": "translate"}, ensure_ascii=False).encode('utf-8'))
-                return
+            async with translation_slot():
+                # 创建翻译器
+                print("[STREAMING] 创建翻译器实例")
+                yield pack_message(1, json.dumps({"stage": "translator_init", "message": "初始化翻译器..."}, ensure_ascii=False).encode('utf-8'))
+                translator = MangaTranslator(params=translator_params)
+
+                # 发送进度：翻译中
+                print("[STREAMING] 开始翻译")
+                yield pack_message(1, json.dumps({"stage": "translating", "message": "正在翻译..."}, ensure_ascii=False).encode('utf-8'))
+
+                # 翻译
+                try:
+                    print("[STREAMING] 调用 translator.translate()")
+                    ctx = await translator.translate(pil_image, config)
+                    print(f"[STREAMING] 翻译完成，ctx.result={ctx.result is not None if hasattr(ctx, 'result') else 'no result attr'}")
+
+                    # 添加 workflow_result（与 get_ctx 保持一致）
+                    result = {
+                        'success': ctx.success if hasattr(ctx, 'success') else (ctx.result is not None),
+                        'workflow': workflow
+                    }
+
+                    if ctx.result:
+                        result['has_image'] = True
+
+                    if hasattr(ctx, 'text_regions') and ctx.text_regions:
+                        result['text_regions'] = []
+                        for region in ctx.text_regions:
+                            region_data = {
+                                'text': region.text if hasattr(region, 'text') else '',
+                                'translation': region.translation if hasattr(region, 'translation') else '',
+                            }
+                            result['text_regions'].append(region_data)
+
+                    ctx._workflow_result = result
+
+                    yield pack_message(1, json.dumps({"stage": "translate_done", "message": "翻译完成，处理结果..."}, ensure_ascii=False).encode('utf-8'))
+                except Exception as translate_error:
+                    error_msg = f"翻译过程失败: {str(translate_error)}"
+                    print(f"[STREAMING ERROR] {error_msg}")
+                    import traceback
+                    traceback.print_exc()
+                    yield pack_message(2, json.dumps({"error": error_msg, "stage": "translate"}, ensure_ascii=False).encode('utf-8'))
+                    return
             
             # 调试：检查 ctx
             has_result = ctx.result is not None if hasattr(ctx, 'result') else False
@@ -359,14 +362,15 @@ async def get_batch_ctx(req: Request, config: Config, images: list[str|bytes], b
     if retry_attempts is not None:
         translator_params['attempts'] = retry_attempts
     
-    # 创建翻译器
-    translator = MangaTranslator(params=translator_params)
-    
-    # 准备批量数据
-    images_with_configs = [(img, config) for img in pil_images]
-    
-    # 批量翻译
-    contexts = await translator.translate_batch(images_with_configs, batch_size)
+    async with translation_slot():
+        # 创建翻译器
+        translator = MangaTranslator(params=translator_params)
+
+        # 准备批量数据
+        images_with_configs = [(img, config) for img in pil_images]
+
+        # 批量翻译
+        contexts = await translator.translate_batch(images_with_configs, batch_size)
     
     # 为每个 context 添加工作流程结果
     for ctx in contexts:

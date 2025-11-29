@@ -301,6 +301,7 @@
     .guest-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; margin-top: 12px; }
     .guest-options label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; color: #1f2937; }
     .guest-options select { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; color: #0f172a; }
+    .guest-toggle { display: flex; align-items: center; gap: 8px; font-weight: 500; color: #475569; }
     .guest-btn { width: 100%; margin-top: 16px; padding: 12px 14px; border-radius: 12px; border: none; background: linear-gradient(90deg,#0ea5e9,#38bdf8); color: #fff; font-weight: 700; cursor: pointer; box-shadow: 0 14px 30px rgba(56,189,248,0.25); }
     .guest-btn:active { transform: translateY(1px); }
     .guest-announcement { margin-top: 10px; padding: 12px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; line-height: 1.6; white-space: pre-wrap; }
@@ -343,6 +344,12 @@
           </label>
           <label>OCR 模型
             <select id="guest-ocr"></select>
+          </label>
+          <label>ai断句
+            <div class="guest-toggle">
+              <input id="guest-auto-wrap" type="checkbox" />
+              <span>使用 AI 断句，避免自动换行</span>
+            </div>
           </label>
         </div>
         <button id="guest-translate-btn" class="guest-btn">开始翻译</button>
@@ -523,7 +530,7 @@
       renderer: '渲染器',
       alignment: '对齐方式',
       disable_font_border: '关闭描边',
-      disable_auto_wrap: '关闭自动换行',
+      disable_auto_wrap: 'ai断句',
       font_size_offset: '字号偏移',
       font_size_minimum: '最小字号',
       max_font_size: '最大字号',
@@ -648,15 +655,58 @@
       return JSON.parse(JSON.stringify(obj || {}));
     }
 
-    function loadAnnouncement() {
+    function loadAnnouncementLocal() {
       const saved = localStorage.getItem(ANNOUNCEMENT_KEY);
       return saved && saved.trim() ? saved : DEFAULT_ANNOUNCEMENT;
     }
 
-    function saveAnnouncement(text) {
-      announcementText = text;
-      localStorage.setItem(ANNOUNCEMENT_KEY, text);
+    function setAnnouncement(text) {
+      announcementText = text && text.trim() ? text.trim() : DEFAULT_ANNOUNCEMENT;
+      localStorage.setItem(ANNOUNCEMENT_KEY, announcementText);
       updateAnnouncementDisplays();
+    }
+
+    async function refreshAnnouncementFromServer() {
+      try {
+        const res = await fetch('/web/announcement');
+        if (!res.ok) throw new Error('拉取失败');
+        const data = await res.json();
+        const text = typeof data?.announcement === 'string' ? data.announcement : '';
+        setAnnouncement(text || DEFAULT_ANNOUNCEMENT);
+        return text || DEFAULT_ANNOUNCEMENT;
+      } catch (e) {
+        log(`公告拉取失败，继续使用本地数据：${e.message || e}`);
+        return announcementText;
+      }
+    }
+
+    async function persistAnnouncementToServer(text) {
+      const res = await fetch('/web/announcement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': adminKey,
+        },
+        body: JSON.stringify({ announcement: text }),
+      });
+
+      if (!res.ok) {
+        let detail = '保存失败';
+        try {
+          const raw = await res.text();
+          if (raw) {
+            try {
+              const data = JSON.parse(raw);
+              detail = data.detail || data.message || detail;
+            } catch {
+              detail = `${detail}: ${raw}`;
+            }
+          }
+        } catch (e) {
+          detail = `${detail}: ${e.message || e}`;
+        }
+        throw new Error(detail);
+      }
     }
 
     function updateAnnouncementDisplays() {
@@ -945,24 +995,46 @@
       const targetSelect = document.getElementById('guest-target');
       const detectorSelect = document.getElementById('guest-detector');
       const ocrSelect = document.getElementById('guest-ocr');
+      const autoWrapToggle = document.getElementById('guest-auto-wrap');
       if (!presetSelect) return;
 
       populateSelect(targetSelect, ENUM_OPTIONS.target_lang || [], configData?.translator?.target_lang || 'CHS');
       populateSelect(detectorSelect, ENUM_OPTIONS.detector || [], configData?.detector?.detector || 'default');
       populateSelect(ocrSelect, ENUM_OPTIONS.ocr || [], configData?.ocr?.ocr || 'mocr');
+      if (autoWrapToggle) {
+        autoWrapToggle.checked = !!configData?.render?.disable_auto_wrap;
+        autoWrapToggle.onchange = () => updateConfigValue('render.disable_auto_wrap', autoWrapToggle.checked);
+      }
 
+      const presets = loadPresets();
       presetSelect.innerHTML = '';
-      const empty = document.createElement('option');
-      empty.value = '';
-      empty.textContent = '不使用预设';
-      presetSelect.appendChild(empty);
-      loadPresets().forEach(p => {
+      if (!presets.length) {
+        const unavailable = document.createElement('option');
+        unavailable.value = '';
+        unavailable.textContent = '当前服务暂不可用，请等待修复';
+        unavailable.disabled = true;
+        unavailable.selected = true;
+        presetSelect.appendChild(unavailable);
+        presetSelect.disabled = true;
+        return;
+      }
+
+      presetSelect.disabled = false;
+      presets.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.name;
         opt.textContent = p.name;
         presetSelect.appendChild(opt);
       });
-      presetSelect.value = currentPresetName();
+
+      const selected = currentPresetName();
+      if (!presets.some(p => p.name === selected)) {
+        const fallback = presets[0];
+        setCurrentPreset(fallback?.name || '');
+        presetSelect.value = fallback?.name || '';
+      } else {
+        presetSelect.value = selected;
+      }
     }
 
     function renderTabs() {
@@ -1091,13 +1163,21 @@
       const selected = currentPresetName();
       container.innerHTML = '';
 
+      if (!presets.length && !adminMode) {
+        const notice = document.createElement('div');
+        notice.className = 'error';
+        notice.textContent = '当前服务暂不可用，请等待修复';
+        container.appendChild(notice);
+        return;
+      }
+
       const row = document.createElement('div');
       row.className = 'preset-row';
 
       const select = document.createElement('select');
       const emptyOption = document.createElement('option');
       emptyOption.value = '';
-      emptyOption.textContent = '不使用预设';
+      emptyOption.textContent = '创建新预设';
       select.appendChild(emptyOption);
       presets.forEach(p => {
         const opt = document.createElement('option');
@@ -1114,7 +1194,9 @@
 
       const info = document.createElement('span');
       info.className = 'hint';
-      info.textContent = adminMode ? '已登录管理员，可编辑云端 API 预设' : '访客只能选择预设名称，管理员可编辑详情';
+      info.textContent = presets.length
+        ? (adminMode ? '已登录管理员，可编辑云端 API 预设' : '访客只能选择预设名称，管理员可编辑详情')
+        : '暂无云端预设，请管理员创建以恢复服务';
       row.appendChild(info);
       container.appendChild(row);
 
@@ -1268,9 +1350,11 @@
       guestConfig.translator = guestConfig.translator || {};
       guestConfig.detector = guestConfig.detector || {};
       guestConfig.ocr = guestConfig.ocr || {};
+      guestConfig.render = guestConfig.render || {};
       guestConfig.translator.target_lang = document.getElementById('guest-target').value;
       guestConfig.detector.detector = document.getElementById('guest-detector').value;
       guestConfig.ocr.ocr = document.getElementById('guest-ocr').value;
+      guestConfig.render.disable_auto_wrap = document.getElementById('guest-auto-wrap')?.checked || false;
       fd.append('config', JSON.stringify(guestConfig));
       if (preset) {
         if (preset.api_base) fd.append('api_base', preset.api_base);
@@ -1373,10 +1457,10 @@
         sessionStorage.setItem(ADMIN_KEY_STORE, key);
         updateAdminStatus();
         await refreshPresetsFromServer();
+        await refreshAnnouncementFromServer();
         renderPresetZone();
         syncAnnouncementEditor();
         enterAdminMode();
-        updateAnnouncementDisplays();
         log('管理员登录成功');
         return true;
       } catch (e) {
@@ -1418,8 +1502,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      announcementText = loadAnnouncement();
-      updateAnnouncementDisplays();
+      setAnnouncement(loadAnnouncementLocal());
+      refreshAnnouncementFromServer();
       renderTabs();
       restoreAdminSession();
       loadPresets();
@@ -1457,14 +1541,19 @@
       document.getElementById('guest-preset').addEventListener('change', (e) => setCurrentPreset(e.target.value));
       document.getElementById('guest-translate-btn').addEventListener('click', translateGuest);
 
-      document.getElementById('announcement-save').addEventListener('click', () => {
+      document.getElementById('announcement-save').addEventListener('click', async () => {
         if (!adminMode) {
           alert('请先登录管理员再编辑公告');
           return;
         }
         const text = document.getElementById('announcement-input').value.trim() || DEFAULT_ANNOUNCEMENT;
-        saveAnnouncement(text);
-        document.getElementById('announcement-msg').textContent = '公告已保存';
+        setAnnouncement(text);
+        try {
+          await persistAnnouncementToServer(text);
+          document.getElementById('announcement-msg').textContent = '公告已保存';
+        } catch (e) {
+          document.getElementById('announcement-msg').textContent = e.message || '公告保存失败';
+        }
       });
 
       const dropzone = document.getElementById('dropzone');

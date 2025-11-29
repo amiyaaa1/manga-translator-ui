@@ -97,7 +97,7 @@ async def wait_in_queue(task: QueueElement | BatchQueueElement, notify: NotifyTy
                 raise HTTPException(500, detail="User is no longer connected")  # just for the logs
         if notify:
             notify(3, str(queue_pos).encode('utf-8'))
-        if queue_pos < executor_instances.free_executors():
+        if queue_pos < executor_instances.available_capacity():
             if await task.is_client_disconnected():
                 await task_queue.update_event()
                 if notify:

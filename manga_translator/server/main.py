@@ -19,6 +19,7 @@ from pathlib import Path
 
 from manga_translator import Config
 from manga_translator.config import Translator
+from manga_translator.server.concurrency import set_limit as set_translation_limit
 from manga_translator.server.instance import ExecutorInstance, executor_instances
 from manga_translator.server.myqueue import task_queue
 from manga_translator.server.request_extraction import get_ctx, while_streaming, TranslateRequest, BatchTranslateRequest, get_batch_ctx
@@ -45,6 +46,28 @@ CLOUD_PRESET_ENV = os.getenv("MT_CLOUD_PRESETS")
 LEGACY_CLOUD_PRESET_PATH = Path(__file__).parent / "cloud_presets.json"
 CLOUD_PRESET_PATH = Path(os.getenv("MT_CLOUD_PRESET_PATH", DATA_DIR / "cloud_presets.json"))
 ADMIN_CONFIG_PATH = Path(os.getenv("MT_ADMIN_CONFIG_PATH", DATA_DIR / "admin_config.json"))
+ANNOUNCEMENT_PATH = Path(os.getenv("MT_ANNOUNCEMENT_PATH", DATA_DIR / "announcement.txt"))
+DEFAULT_ANNOUNCEMENT = """本项目完全免费。
+项目地址：https://github.com/hgmzhn/manga-translator-ui
+受限于服务器资源，当前仅支持基础功能体验，完整服务如ai断句、编辑、批量翻译、超分等请于Github下载本项目。"""
+
+MAX_CONCURRENCY_DEFAULT = 5
+
+
+def _parse_max_concurrency(raw: str | None, default: int = MAX_CONCURRENCY_DEFAULT) -> int:
+    try:
+        parsed = int(raw) if raw is not None else default
+        return parsed if parsed > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+EXECUTOR_MAX_CONCURRENCY = _parse_max_concurrency(
+    os.getenv("ZEABUR_MAX_CONCURRENCY") or os.getenv("MT_MAX_CONCURRENCY"),
+    MAX_CONCURRENCY_DEFAULT,
+)
+executor_instances.set_limit(EXECUTOR_MAX_CONCURRENCY)
+set_translation_limit(EXECUTOR_MAX_CONCURRENCY)
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
@@ -125,6 +148,26 @@ def save_admin_config(config: dict):
             json.dump(config, f, ensure_ascii=False, indent=2)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"无法保存管理员配置：{e}")
+
+
+def load_announcement() -> str:
+    if not ANNOUNCEMENT_PATH.exists():
+        return DEFAULT_ANNOUNCEMENT
+    try:
+        return ANNOUNCEMENT_PATH.read_text(encoding="utf-8")
+    except Exception as e:
+        print(f"[WARNING] Failed to load announcement from {ANNOUNCEMENT_PATH}: {e}")
+        return DEFAULT_ANNOUNCEMENT
+
+
+def save_announcement(text: str):
+    if not isinstance(text, str):
+        raise HTTPException(status_code=400, detail="公告内容必须为字符串")
+    try:
+        ANNOUNCEMENT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ANNOUNCEMENT_PATH.write_text(text, encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"无法保存公告：{e}")
 
 def parse_config(config_str: str) -> Config:
     """解析配置，如果为空则使用默认配置"""
@@ -260,6 +303,35 @@ async def set_admin_config(req: Request):
 
     save_admin_config(config)
     return {"ok": True, "config": config}
+
+
+@app.get("/web/announcement")
+async def get_announcement():
+    """Return the shared announcement content."""
+    return {"announcement": load_announcement()}
+
+
+@app.post("/web/announcement")
+async def set_announcement(req: Request):
+    """Persist the announcement so it can be loaded across devices."""
+    data = await req.json()
+    provided = str(req.headers.get("X-Admin-Key", "") or "").strip()
+    secret = os.getenv(ADMIN_SECRET_ENV)
+
+    if not secret:
+        raise HTTPException(status_code=503, detail="管理员密钥未在服务器上配置")
+    if provided != secret:
+        raise HTTPException(status_code=401, detail="管理员密钥不正确")
+
+    text = data.get("announcement") if isinstance(data, dict) else None
+    if text is None:
+        text = DEFAULT_ANNOUNCEMENT
+    if not isinstance(text, str):
+        raise HTTPException(status_code=400, detail="公告内容必须为字符串")
+
+    cleaned = text.strip() or DEFAULT_ANNOUNCEMENT
+    save_announcement(cleaned)
+    return {"ok": True, "announcement": cleaned}
 
 @app.post("/register", response_description="no response", tags=["internal-api"])
 async def register_instance(instance: ExecutorInstance, req: Request, req_nonce: str = Header(alias="X-Nonce")):

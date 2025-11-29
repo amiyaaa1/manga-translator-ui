@@ -404,7 +404,19 @@ class CommonTranslator(InfererModule):
     def _reset_global_attempt_count(self):
         """重置全局尝试计数器（每次新的翻译任务开始时调用）"""
         self._global_attempt_count = 0
-        self._max_total_attempts = self.attempts
+        self._max_total_attempts = self._get_effective_attempts()
+
+    def _get_effective_attempts(self) -> int:
+        """
+        获取当前请求的有效最大重试次数。
+
+        - 未设置或小于等于 0 时默认使用 3 次
+        - 大于 3 的值也会被限制在 3 次以内
+        """
+        if not self.attempts or self.attempts <= 0:
+            return 3
+
+        return min(self.attempts, 3)
 
     def _increment_global_attempt(self) -> bool:
         """
@@ -421,7 +433,7 @@ class CommonTranslator(InfererModule):
             return True
 
         # 检查是否超过上限
-        if self._global_attempt_count >= self._max_total_attempts:
+        if self._global_attempt_count > self._max_total_attempts:
             self.logger.warning(f"Reached max total attempts: {self._global_attempt_count}/{self._max_total_attempts}")
             return False
 

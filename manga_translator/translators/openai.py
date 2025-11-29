@@ -200,7 +200,7 @@ This is an incorrect response because it includes extra text and explanations.
         ]
         
         # 发送请求
-        max_retries = self.attempts
+        max_retries = self._max_total_attempts
         attempt = 0
         is_infinite = max_retries == -1
         last_exception = None

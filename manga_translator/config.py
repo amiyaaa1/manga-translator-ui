@@ -260,8 +260,8 @@ class TranslatorConfig(BaseModel):
     """Select a translator based on detected language in image. Note the first translation service acts as default if the language isn\'t defined. Example: --translator-chain "google:JPN;sugoi:ENG".'"""
     
     # 重试配置
-    attempts: int = -1
-    """Retry attempts on encountered error. -1 means infinite times."""
+    attempts: int = 3
+    """Retry attempts on encountered error. Values above 3 are capped to 3."""
     
     # API请求频率限制配置
     max_requests_per_minute: int = 0

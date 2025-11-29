@@ -273,7 +273,7 @@ class GeminiHighQualityTranslator(CommonTranslator):
             content_parts.append(processed_image)
         
         # 发送请求
-        max_retries = self.attempts
+        max_retries = self._max_total_attempts
         attempt = 0
         is_infinite = max_retries == -1
         local_attempt = 0  # 本次批次的尝试次数
