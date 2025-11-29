@@ -163,6 +163,7 @@ python -m manga_translator --help
 - Web 模式默认读取 `HOST` / `PORT` 环境变量，并在缺省时回退到 `0.0.0.0:8000`，以适配 Zeabur 等平台的端口分配。
 - Docker 镜像的默认启动命令改为 `python -m manga_translator web --host 0.0.0.0 --port ${PORT:-8000}`，无需手动传参即可在 Zeabur 运行。
 - Zeabur 默认禁止 `executable stack`，会导致基于 `ctranslate2` 的离线翻译器（Sugoi/Jparacrawl、M2M100、默认的 `offline` 组合）无法加载。容器会自动跳过这些翻译器，请在云端改用其他翻译器（如 `--translator nllb` / `--translator qwen2` 或云端 GPT/翻译服务）。
+- 后端处理默认允许 **5** 路并发。你可以在 Zeabur 面板设置 `ZEABUR_MAX_CONCURRENCY`（或 `MT_MAX_CONCURRENCY`）环境变量即时调整上限。
 
 ### 部署前准备
 

@@ -50,6 +50,23 @@ DEFAULT_ANNOUNCEMENT = """本项目完全免费。
 项目地址：https://github.com/hgmzhn/manga-translator-ui
 受限于服务器资源，当前仅支持基础功能体验，完整服务如ai断句、编辑、批量翻译、超分等请于Github下载本项目。"""
 
+MAX_CONCURRENCY_DEFAULT = 5
+
+
+def _parse_max_concurrency(raw: str | None, default: int = MAX_CONCURRENCY_DEFAULT) -> int:
+    try:
+        parsed = int(raw) if raw is not None else default
+        return parsed if parsed > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+EXECUTOR_MAX_CONCURRENCY = _parse_max_concurrency(
+    os.getenv("ZEABUR_MAX_CONCURRENCY") or os.getenv("MT_MAX_CONCURRENCY"),
+    MAX_CONCURRENCY_DEFAULT,
+)
+executor_instances.set_limit(EXECUTOR_MAX_CONCURRENCY)
+
 def load_default_config() -> Config:
     """加载默认配置文件"""
     target_path = DEFAULT_CONFIG_PATH
