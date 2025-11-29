@@ -40,7 +40,9 @@ server_config = {
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config.json')
 DEFAULT_CONFIG_FALLBACK = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config-example.json')
 FRONTEND_DIR = Path(__file__).parent / "frontend"
-CLOUD_PRESET_PATH = Path(__file__).parent / "cloud_presets.json"
+DATA_DIR = Path(os.getenv("MT_DATA_DIR", Path.home() / ".manga_translator"))
+LEGACY_CLOUD_PRESET_PATH = Path(__file__).parent / "cloud_presets.json"
+CLOUD_PRESET_PATH = Path(os.getenv("MT_CLOUD_PRESET_PATH", DATA_DIR / "cloud_presets.json"))
 
 def load_default_config() -> Config:
     """加载默认配置文件"""
@@ -64,22 +66,28 @@ def load_default_config() -> Config:
 
 def load_cloud_presets() -> list[dict]:
     """Load shared cloud API presets from disk."""
-    if not CLOUD_PRESET_PATH.exists():
-        return []
+    for path in (CLOUD_PRESET_PATH, LEGACY_CLOUD_PRESET_PATH):
+        if not path.exists():
+            continue
 
-    try:
-        with CLOUD_PRESET_PATH.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except Exception as e:
-        print(f"[WARNING] Failed to load cloud presets: {e}")
-        return []
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[WARNING] Failed to load cloud presets from {path}: {e}")
+            continue
+
+    return []
 
 
 def save_cloud_presets(presets: list[dict]):
-    CLOUD_PRESET_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with CLOUD_PRESET_PATH.open("w", encoding="utf-8") as f:
-        json.dump(presets, f, ensure_ascii=False, indent=2)
+    try:
+        CLOUD_PRESET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with CLOUD_PRESET_PATH.open("w", encoding="utf-8") as f:
+            json.dump(presets, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"无法保存云端预设：{e}")
 
 def parse_config(config_str: str) -> Config:
     """解析配置，如果为空则使用默认配置"""
