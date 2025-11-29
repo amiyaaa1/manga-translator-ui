@@ -373,6 +373,7 @@
       post_check_max_retry_attempts: '译后重试次数',
       post_check_repetition_threshold: '重复阈值',
       post_check_target_lang_threshold: '目标语占比阈值',
+      force_strict_layout: '严格布局',
       verbose: '详细日志',
       ignore_errors: '忽略错误',
       use_gpu: '启用 GPU',
@@ -404,6 +405,7 @@
       box_threshold: '文本框阈值',
       unclip_ratio: '膨胀比例',
       min_box_area_ratio: '最小区域比例',
+      force_simple_sort: '简易排序',
       inpainter: '修复器',
       inpainting_size: '修复尺寸',
       inpainting_precision: '修复精度',
@@ -471,6 +473,36 @@
       secondary_ocr: ['32px','48px','48px_ctc','mocr','paddleocr','paddleocr_korean','paddleocr_latin'],
       format: ['不指定','json','text','csv'],
       theme: ['light','dark']
+    };
+
+    const SECTION_FIELDS = {
+      translator: [
+        'translator','target_lang','skip_lang','no_text_lang_skip','gpt_config','high_quality_prompt_path','translator_chain','selective_translation','attempts','max_requests_per_minute','enable_post_translation_check','post_check_max_retry_attempts','post_check_repetition_threshold','post_check_target_lang_threshold'
+      ],
+      cli: [
+        'verbose','attempts','ignore_errors','use_gpu','use_gpu_limited','context_size','format','overwrite','skip_no_text','save_text','load_text','template','save_quality','batch_size','batch_concurrent','generate_and_export','colorize_only','upscale_only','last_output_path'
+      ],
+      detector: [
+        'detector','detection_size','text_threshold','det_rotate','det_auto_rotate','det_invert','det_gamma_correct','use_yolo_obb','yolo_obb_conf','yolo_obb_iou','yolo_obb_overlap_threshold','box_threshold','unclip_ratio','min_box_area_ratio'
+      ],
+      inpainter: [
+        'inpainter','inpainting_size','inpainting_precision','inpainting_split_ratio'
+      ],
+      render: [
+        'renderer','force_strict_layout','alignment','direction','disable_font_border','disable_auto_wrap','font_size_offset','font_size_minimum','max_font_size','font_scale_ratio','center_text_in_bubble','optimize_line_breaks','check_br_and_retry','strict_smart_scaling','font_size','line_spacing','font_path','gimp_font','no_hyphenation','font_color','auto_rotate_symbols','rtl','layout_mode','stroke_width'
+      ],
+      upscale: [
+        'upscaler','upscale_ratio','realcugan_model','tile_size','revert_upscaling'
+      ],
+      colorizer: [
+        'colorizer','colorization_size','denoise_sigma'
+      ],
+      ocr: [
+        'use_mocr_merge','ocr','use_hybrid_ocr','secondary_ocr','min_text_length','ignore_bubble','prob','merge_gamma','merge_sigma','merge_edge_ratio_threshold'
+      ],
+      global: [
+        'filter_text','kernel_size','mask_dilation_offset','force_simple_sort'
+      ],
     };
 
     let configData = {};
@@ -572,7 +604,11 @@
     function renderSection(containerId, sectionKey, sectionData) {
       const container = document.getElementById(containerId);
       container.innerHTML = '';
-      const entries = Object.entries(sectionData || {});
+      const defaultSection = sectionKey ? (defaultConfig[sectionKey] || {}) : defaultConfig;
+      const fields = SECTION_FIELDS[sectionKey || 'global'];
+      const entries = (fields && fields.length
+        ? fields.map(key => [key, (sectionData && sectionData[key] !== undefined ? sectionData[key] : defaultSection ? defaultSection[key] : null)])
+        : Object.entries(sectionData || {}));
       entries.forEach(([key, value]) => {
         const row = document.createElement('div');
         row.className = 'form-row';
@@ -594,12 +630,11 @@
       renderSection('colorizer-settings', 'colorizer', configData.colorizer || {});
       renderSection('ocr-settings', 'ocr', configData.ocr || {});
 
-      const globals = {
-        filter_text: configData.filter_text ?? null,
-        kernel_size: configData.kernel_size ?? 3,
-        mask_dilation_offset: configData.mask_dilation_offset ?? 20,
-      };
-      renderSection('global-settings', '', globals);
+      const globals = {};
+      SECTION_FIELDS.global.forEach(key => {
+        globals[key] = configData[key] ?? defaultConfig[key] ?? null;
+      });
+      renderSection('global-settings', 'global', globals);
       renderPresetZone();
     }
 
