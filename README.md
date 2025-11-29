@@ -196,7 +196,7 @@ python -m manga_translator --help
 - 网页端已重构为与本地 Qt 界面相同的布局：左侧文件列表 + 右侧「基础/高级/选项/日志」完整设置面板，字段名称与本地保持一致。
 - 左侧上传漫画图片后，可在云端 API 设置里填写 **Base URL / 模型名称 / API Key**（OpenAI 兼容），保存为多个预设。
 - 仅管理员登录后可编辑云端 API 预设；访客只能看到当前预设名称，避免误改密钥。管理员密钥来自环境变量 `WEB_CONSOLE_ADMIN_KEY`。
-- 云端预设默认保存在服务器 `~/.manga_translator/cloud_presets.json`，可通过 `MT_DATA_DIR` 或 `MT_CLOUD_PRESET_PATH` 覆盖保存位置；如果之前版本已在 `manga_translator/server/cloud_presets.json` 中写入，会自动读取旧文件。
+- 云端预设默认保存在服务器 `~/.manga_translator/cloud_presets.json`，可通过 `MT_DATA_DIR` 或 `MT_CLOUD_PRESET_PATH` 覆盖保存位置；如果之前版本已在 `manga_translator/server/cloud_presets.json` 中写入，会自动读取旧文件。若希望跨设备直接下发一组预设且禁用服务器写盘，可设置环境变量 `MT_CLOUD_PRESETS` 为预设列表的 JSON 字符串（示例：`export MT_CLOUD_PRESETS='[{"name":"默认","api_base":"https://api.openai.com/v1","api_model":"gpt-4o-mini","api_key":"sk-xxx"}]'`），此时访客只读引用该列表，管理员侧保存入口会提示已被环境变量接管。
 - 点击「开始翻译」后会调用 `/translate/with-form/image`，右侧即时预览翻译结果并可下载。
 - 如果云端禁用了 `ctranslate2`（Zeabur 常见），离线翻译器会被自动跳过，建议切换到 `nllb`、`qwen2` 或云端翻译 API 预设。
 

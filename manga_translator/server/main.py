@@ -41,6 +41,7 @@ DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'examp
 DEFAULT_CONFIG_FALLBACK = os.path.join(os.path.dirname(__file__), '..', '..', 'examples', 'config-example.json')
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 DATA_DIR = Path(os.getenv("MT_DATA_DIR", Path.home() / ".manga_translator"))
+CLOUD_PRESET_ENV = os.getenv("MT_CLOUD_PRESETS")
 LEGACY_CLOUD_PRESET_PATH = Path(__file__).parent / "cloud_presets.json"
 CLOUD_PRESET_PATH = Path(os.getenv("MT_CLOUD_PRESET_PATH", DATA_DIR / "cloud_presets.json"))
 
@@ -66,6 +67,13 @@ def load_default_config() -> Config:
 
 def load_cloud_presets() -> list[dict]:
     """Load shared cloud API presets from disk."""
+    if CLOUD_PRESET_ENV:
+        try:
+            data = json.loads(CLOUD_PRESET_ENV)
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[WARNING] Failed to parse MT_CLOUD_PRESETS: {e}")
+
     for path in (CLOUD_PRESET_PATH, LEGACY_CLOUD_PRESET_PATH):
         if not path.exists():
             continue
@@ -82,6 +90,8 @@ def load_cloud_presets() -> list[dict]:
 
 
 def save_cloud_presets(presets: list[dict]):
+    if CLOUD_PRESET_ENV:
+        raise HTTPException(status_code=503, detail="当前由环境变量 MT_CLOUD_PRESETS 管理，无法保存云端预设")
     try:
         CLOUD_PRESET_PATH.parent.mkdir(parents=True, exist_ok=True)
         with CLOUD_PRESET_PATH.open("w", encoding="utf-8") as f:
@@ -227,7 +237,7 @@ def transform_to_bytes(ctx):
     return to_translation(ctx).to_bytes()
 
 @app.post("/translate/json", response_model=TranslationResponse, tags=["api", "json"],response_description="json strucure inspired by the ichigo translator extension")
-async def json(req: Request, data: TranslateRequest):
+async def translate_json(req: Request, data: TranslateRequest):
     ctx = await get_ctx(req, data.config, data.image, "save_json")
     return to_translation(ctx)
 
